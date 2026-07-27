@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CMP Banner Test</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 720px;
+        margin: 3rem auto;
+        padding: 0 1rem;
+        line-height: 1.6;
+      }
+      code {
+        background: #f3f4f6;
+        padding: 0.15rem 0.4rem;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>CMP banner test page</h1>
+    <p>
+      Replace <code>YOUR_DOMAIN_KEY</code> in this file with your domain key from the admin
+      (Domains → your domain → detail page).
+    </p>
+    <p>After publishing banner config in admin, reload this page to see the banner.</p>
+    <p>Open DevTools → Application → Local Storage to inspect saved consent.</p>
+    <p><button type="button" onclick="window.__CMP__?.showBanner?.()">Show banner again</button></p>
+
+    <script
+      src="http://localhost:4000/api/v1/public/cmp/sdk.js"
+      data-domain-key="YOUR_DOMAIN_KEY"
+      data-env="production"
+      data-debug="true"
+      async
+    ></script>
+  </body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "name": "@cmp/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CMP client-side SDK with consent banner",
+  "main": "dist/sdk.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:browser": "node build.mjs && playwright test",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.1",
+    "esbuild": "^0.25.5",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,0 +1,417 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING
+  LOCKED
+  DISABLED
+  DELETED
+
+  @@map("user_status")
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+
+  @@map("organization_status")
+}
+
+model Organization {
+  id                 String             @id @default(uuid()) @db.Uuid
+  name               String
+  slug               String             @unique
+  legalName          String?            @map("legal_name")
+  businessType       String?            @map("business_type")
+  country            String?            @db.Char(2)
+  timezone           String?
+  defaultLanguage    String?            @map("default_language")
+  defaultRegulation  String?            @map("default_regulation")
+  billingEmail       String?            @map("billing_email")
+  technicalContact   String?            @map("technical_contact")
+  privacyContact     String?            @map("privacy_contact")
+  dpoDetails         String?            @map("dpo_details")
+  onboardingStep     Int                @default(0) @map("onboarding_step")
+  onboardingComplete Boolean            @default(false) @map("onboarding_complete")
+  status             OrganizationStatus @default(ACTIVE)
+  deletedAt          DateTime?          @map("deleted_at")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  users     User[]
+  domains   Domain[]
+  auditLogs AuditLog[]
+
+  @@index([status])
+  @@map("organizations")
+}
+
+model User {
+  id                String     @id @default(uuid()) @db.Uuid
+  organizationId    String?    @map("organization_id") @db.Uuid
+  auth0Sub          String?    @unique @map("auth0_sub")
+  email             String     @unique
+  passwordHash      String?    @map("password_hash")
+  firstName         String     @map("first_name")
+  lastName          String     @map("last_name")
+  emailVerified     Boolean    @default(false) @map("email_verified")
+  emailVerifiedAt   DateTime?  @map("email_verified_at")
+  status            UserStatus @default(PENDING)
+  failedLoginCount  Int        @default(0) @map("failed_login_count")
+  lockedUntil       DateTime?  @map("locked_until")
+  lastLoginAt       DateTime?  @map("last_login_at")
+  deletedAt         DateTime?  @map("deleted_at")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+
+  organization        Organization?         @relation(fields: [organizationId], references: [id])
+  roles               UserRole[]
+  refreshTokens       RefreshToken[]
+  loginHistory        LoginHistory[]
+  auditLogs           AuditLog[]
+  emailVerifications  EmailVerificationToken[]
+  passwordResetTokens PasswordResetToken[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  slug        String   @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id        String   @id @default(uuid()) @db.Uuid
+  slug      String   @unique
+  name      String
+  module    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  roles RolePermission[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+model UserRole {
+  userId    String   @map("user_id") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  userAgent String?   @map("user_agent")
+  ipAddress String?   @map("ip_address")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model LoginHistory {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  success   Boolean
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("login_history")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  action         String
+  module         String
+  previousValue  Json?    @map("previous_value")
+  newValue       Json?    @map("new_value")
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  requestId      String?  @map("request_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
+  @@index([module, action])
+  @@map("audit_logs")
+}
+
+enum DomainType {
+  ROOT
+  SUBDOMAIN
+  STAGING
+  ALIAS
+
+  @@map("domain_type")
+}
+
+enum DomainVerificationStatus {
+  PENDING
+  VERIFIED
+  FAILED
+
+  @@map("domain_verification_status")
+}
+
+enum DomainVerificationMethod {
+  DNS_TXT
+  HTML_FILE
+  META_TAG
+  CMP_SCRIPT
+  MANUAL
+
+  @@map("domain_verification_method")
+}
+
+enum ValidationCheckStatus {
+  PASS
+  WARNING
+  FAIL
+
+  @@map("validation_check_status")
+}
+
+model Domain {
+  id                 String                   @id @default(uuid()) @db.Uuid
+  organizationId     String                   @map("organization_id") @db.Uuid
+  hostname           String                   @unique
+  domainKey          String                   @unique @map("domain_key")
+  domainType         DomainType               @default(ROOT) @map("domain_type")
+  isProduction       Boolean                  @default(true) @map("is_production")
+  enabled            Boolean                  @default(true)
+  groupName          String?                  @map("group_name")
+  scanLimit          Int                      @default(10) @map("scan_limit")
+  environment        String                   @default("production")
+  region             String?
+  autoBlocking       Boolean                  @default(true) @map("auto_blocking")
+  debugMode          Boolean                  @default(false) @map("debug_mode")
+  configVersion      Int                      @default(1) @map("config_version")
+  verificationStatus DomainVerificationStatus @default(PENDING) @map("verification_status")
+  verificationMethod DomainVerificationMethod? @map("verification_method")
+  verificationToken  String                   @map("verification_token")
+  verifiedAt         DateTime?                @map("verified_at")
+  lastVerifiedAt     DateTime?                @map("last_verified_at")
+  sdkLastSeenAt      DateTime?                @map("sdk_last_seen_at")
+  sdkLastHeartbeat   Json?                    @map("sdk_last_heartbeat")
+  deletedAt          DateTime?                @map("deleted_at")
+  createdAt          DateTime                 @default(now()) @map("created_at")
+  updatedAt          DateTime                 @updatedAt @map("updated_at")
+
+  organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  installationChecks   InstallationValidation[]
+  consentCategories    ConsentCategory[]
+  policyVersions       PolicyVersion[]
+  consentRenewals      ConsentRenewal[]
+  consentSubmissions   ConsentSubmission[]
+
+  @@index([organizationId])
+  @@index([verificationStatus])
+  @@map("domains")
+}
+
+model InstallationValidation {
+  id             String   @id @default(uuid()) @db.Uuid
+  domainId       String   @map("domain_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  overallStatus  ValidationCheckStatus @map("overall_status")
+  checks         Json
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId, createdAt])
+  @@map("installation_validations")
+}
+
+enum ConsentCategoryDefaultState {
+  ENABLED
+  DISABLED
+
+  @@map("consent_category_default_state")
+}
+
+enum PolicyVersionStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+
+  @@map("policy_version_status")
+}
+
+model ConsentCategory {
+  id              String                    @id @default(uuid()) @db.Uuid
+  domainId        String                    @map("domain_id") @db.Uuid
+  organizationId  String                    @map("organization_id") @db.Uuid
+  slug            String
+  name            String
+  description     String?
+  legalBasis      String?                   @map("legal_basis")
+  defaultState    ConsentCategoryDefaultState @default(DISABLED) @map("default_state")
+  required        Boolean                   @default(false)
+  sortOrder       Int                       @default(0) @map("sort_order")
+  isSystem        Boolean                   @default(false) @map("is_system")
+  enabled         Boolean                   @default(true)
+  externalSignals Json?                     @map("external_signals")
+  scriptMappings  Json?                     @map("script_mappings")
+  vendorPurposes  Json?                     @map("vendor_purposes")
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  updatedAt       DateTime                  @updatedAt @map("updated_at")
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@unique([domainId, slug])
+  @@index([domainId, sortOrder])
+  @@map("consent_categories")
+}
+
+model PolicyVersion {
+  id                   String              @id @default(uuid()) @db.Uuid
+  domainId             String              @map("domain_id") @db.Uuid
+  organizationId       String              @map("organization_id") @db.Uuid
+  versionNumber        Int                 @map("version_number")
+  status               PolicyVersionStatus @default(DRAFT)
+  categoriesSnapshot   Json?               @map("categories_snapshot")
+  bannerContent        Json?               @map("banner_content")
+  legalText            Json?               @map("legal_text")
+  regulationConfig     Json?               @map("regulation_config")
+  defaultConsentStates Json?               @map("default_consent_states")
+  supportedLanguages   Json?               @map("supported_languages")
+  scheduledAt          DateTime?           @map("scheduled_at")
+  publishedAt          DateTime?           @map("published_at")
+  archivedAt           DateTime?           @map("archived_at")
+  requiresRenewal      Boolean             @default(false) @map("requires_renewal")
+  renewalReason        Json?               @map("renewal_reason")
+  changeSummary        String?             @map("change_summary")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+
+  domain          Domain           @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  consentRenewals ConsentRenewal[]
+
+  @@unique([domainId, versionNumber])
+  @@index([domainId, status])
+  @@map("policy_versions")
+}
+
+model ConsentRenewal {
+  id              String   @id @default(uuid()) @db.Uuid
+  domainId        String   @map("domain_id") @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  policyVersionId String?  @map("policy_version_id") @db.Uuid
+  reason          String
+  scope           String   @default("all")
+  triggeredBy     String?  @map("triggered_by") @db.Uuid
+  metadata        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  domain        Domain         @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  policyVersion PolicyVersion? @relation(fields: [policyVersionId], references: [id], onDelete: SetNull)
+
+  @@index([domainId, createdAt])
+  @@map("consent_renewals")
+}
+
+model ConsentSubmission {
+  id               String    @id @default(uuid()) @db.Uuid
+  domainId         String    @map("domain_id") @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  visitorId        String    @map("visitor_id")
+  policyVersionId  String?   @map("policy_version_id") @db.Uuid
+  configVersion    Int       @map("config_version")
+  categories       Json
+  region           String?
+  language         String?
+  collectionMethod String    @map("collection_method")
+  checksum         String
+  userAgent        String?   @map("user_agent")
+  expiresAt        DateTime? @map("expires_at")
+  withdrawnAt      DateTime? @map("withdrawn_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId, visitorId])
+  @@index([domainId, createdAt])
+  @@map("consent_submissions")
+}
