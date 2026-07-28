@@ -1,5 +1,9 @@
 # Cloud Build for consent-management-api (Cloud Run GitHub deploy trigger).
 # In GCP Console: Configuration → Cloud Build configuration file → Repository → cloudbuild.api.yaml
+#
+# Before first deploy, create secrets in Secret Manager:
+#   DATABASE_URL, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET
+# Then set substitution variables on the trigger (see substitutions below).
 
 steps:
   - name: gcr.io/cloud-builders/docker
@@ -29,8 +33,11 @@ steps:
       - $_SERVICE_NAME
       - '--platform=managed'
       - '--image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
-      - '--labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID'
       - '--region=$_DEPLOY_REGION'
+      - '--port=8080'
+      - '--set-env-vars=NODE_ENV=production,API_PREFIX=api/v1,ADMIN_URL=${_ADMIN_URL},API_URL=${_API_URL},EMAIL_VERIFICATION_ENABLED=false,DOMAIN_AUTO_VERIFY=false'
+      - '--set-secrets=DATABASE_URL=DATABASE_URL:latest,JWT_ACCESS_SECRET=JWT_ACCESS_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest'
+      - '--labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID'
       - '--quiet'
 
 images:
@@ -39,3 +46,7 @@ images:
 options:
   substitutionOption: ALLOW_LOOSE
   logging: CLOUD_LOGGING_ONLY
+
+substitutions:
+  _API_URL: https://consent-management-api-CHANGE_ME.run.app
+  _ADMIN_URL: https://consent-management-admin-CHANGE_ME.run.app
