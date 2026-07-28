@@ -25,6 +25,9 @@ RUN pnpm --filter @cmp/database generate
 RUN pnpm --filter @cmp/sdk build
 RUN pnpm --filter @cmp/api... build
 RUN pnpm --filter @cmp/api deploy --prod /prod/api
+RUN SCHEMA="$(find /prod/api/node_modules -path '*/@cmp/database/prisma/schema.prisma' -print -quit)" && \
+    test -n "$SCHEMA" && \
+    pnpm exec prisma generate --schema="$SCHEMA"
 
 FROM node:20-alpine AS runner
 WORKDIR /app

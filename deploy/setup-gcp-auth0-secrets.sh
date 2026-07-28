@@ -25,7 +25,6 @@ for ENV_FILE in "$ROOT/.env" "$ROOT/../../varnarc_web/project/.env"; do
     # shellcheck disable=SC1090
     source "$ENV_FILE"
     set +a
-    break
   fi
 done
 
