@@ -1,7 +1,12 @@
-import { config } from 'dotenv';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-config({ path: resolve(__dirname, '../../../.env') });
+// Cloud Run injects env vars directly — only load .env for local development.
+const envPath = resolve(__dirname, '../../../.env');
+if (process.env.NODE_ENV !== 'production' && existsSync(envPath)) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('dotenv').config({ path: envPath });
+}
 
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';

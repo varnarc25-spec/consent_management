@@ -42,6 +42,8 @@ pnpm dev:web     # http://localhost:3000
 
 Deploy to Google Cloud (Cloud Run + Cloud SQL): see [`docs/DEPLOY-GCP.md`](./docs/DEPLOY-GCP.md).
 
+Auth0 (admin login): see [`docs/AUTH0-SETUP.md`](./docs/AUTH0-SETUP.md).
+
 ## Sprint 1 — Foundation (Complete)
 
 - Multi-tenant organizations (create, update, soft-delete, permanent delete)
