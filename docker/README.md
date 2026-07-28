@@ -26,7 +26,28 @@ docker build -f Dockerfile.api .
 
 | Setting | Value |
 |---------|--------|
-| **Source / build context** | `.` (repository root) |
+| **Configuration type** | Cloud Build configuration file (yaml) — **not Inline** |
+| **Config file** | `cloudbuild.api.yaml` / `cloudbuild.admin.yaml` / `cloudbuild.web.yaml` |
+| **Source directory** | leave empty (repo root) |
+
+Do **not** use Inline config with `docker` as the build context — that sends only ~9 KB and fails with `package.json not found`.
+
+### Switch an existing trigger from Inline → Repository config
+
+1. Cloud Build → Triggers → edit your trigger
+2. **Configuration** → select **Cloud Build configuration file (yaml or json)**
+3. **Location** → **Repository**
+4. **Cloud Build configuration file location**:
+   - API trigger → `cloudbuild.api.yaml`
+   - Admin trigger → `cloudbuild.admin.yaml`
+   - Web trigger → `cloudbuild.web.yaml`
+5. Save and re-run
+
+### Manual docker build (repo root context)
+
+| Setting | Value |
+|---------|--------|
+| **Build context** | `.` (repository root) |
 | **Dockerfile path** | `docker/Dockerfile.api` |
 
 Do **not** set the source directory to `docker`.

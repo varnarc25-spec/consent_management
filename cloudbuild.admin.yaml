@@ -1,0 +1,53 @@
+# Cloud Build for consent-management-admin (Cloud Run GitHub deploy trigger).
+# In GCP Console: Configuration → Cloud Build configuration file → Repository → cloudbuild.admin.yaml
+#
+# Set substitution variables on the trigger (or defaults below):
+#   _NEXT_PUBLIC_API_URL  e.g. https://api.yourdomain.com/api/v1
+#   _AUTH0_DOMAIN         e.g. your-tenant.us.auth0.com
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: Build
+    args:
+      - build
+      - '--no-cache'
+      - '-t'
+      - '$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
+      - '-f'
+      - docker/Dockerfile.admin
+      - '--build-arg'
+      - NEXT_PUBLIC_API_URL=${_NEXT_PUBLIC_API_URL}
+      - '--build-arg'
+      - AUTH0_DOMAIN=${_AUTH0_DOMAIN}
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: Push
+    args:
+      - push
+      - '$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    id: Deploy
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update
+      - $_SERVICE_NAME
+      - '--platform=managed'
+      - '--image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
+      - '--labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID'
+      - '--region=$_DEPLOY_REGION'
+      - '--quiet'
+
+images:
+  - '$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
+
+options:
+  substitutionOption: ALLOW_LOOSE
+  logging: CLOUD_LOGGING_ONLY
+
+substitutions:
+  _NEXT_PUBLIC_API_URL: https://api.example.com/api/v1
+  _AUTH0_DOMAIN: your-tenant.us.auth0.com
