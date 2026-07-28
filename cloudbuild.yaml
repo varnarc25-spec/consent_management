@@ -1,0 +1,136 @@
+# Cloud Build — build images and deploy to Cloud Run.
+# See docs/DEPLOY-GCP.md for one-time GCP setup (APIs, Cloud SQL, secrets).
+
+substitutions:
+  _REGION: us-central1
+  _REPOSITORY: cmp
+  _API_SERVICE: cmp-api
+  _ADMIN_SERVICE: cmp-admin
+  _WEB_SERVICE: cmp-web
+  _CLOUDSQL_INSTANCE: ''
+  _API_URL: https://api.example.com
+  _ADMIN_URL: https://admin.example.com
+  _WEB_URL: https://www.example.com
+  _NEXT_PUBLIC_API_URL: https://api.example.com/api/v1
+  _AUTH0_DOMAIN: your-tenant.us.auth0.com
+  _AUTH0_CLIENT_ID: ''
+  _API_SECRETS: DATABASE_URL=DATABASE_URL:latest,JWT_ACCESS_SECRET=JWT_ACCESS_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest
+  _ADMIN_SECRETS: AUTH0_CLIENT_SECRET=AUTH0_CLIENT_SECRET:latest,AUTH0_SECRET=AUTH0_SECRET:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+steps:
+  # ── Build images (parallel) ──────────────────────────────────────────────
+  - name: gcr.io/cloud-builders/docker
+    id: build-api
+    args:
+      - build
+      - -f
+      - Dockerfile.api
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/api:$SHORT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/api:latest
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: build-admin
+    args:
+      - build
+      - -f
+      - Dockerfile.admin
+      - --build-arg
+      - NEXT_PUBLIC_API_URL=${_NEXT_PUBLIC_API_URL}
+      - --build-arg
+      - AUTH0_DOMAIN=${_AUTH0_DOMAIN}
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/admin:$SHORT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/admin:latest
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: build-web
+    args:
+      - build
+      - -f
+      - Dockerfile.web
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/web:$SHORT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/web:latest
+      - .
+
+  # ── Push images ──────────────────────────────────────────────────────────
+  - name: gcr.io/cloud-builders/docker
+    id: push-api
+    waitFor: [build-api]
+    args: [push, --all-tags, ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/api]
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-admin
+    waitFor: [build-admin]
+    args: [push, --all-tags, ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/admin]
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-web
+    waitFor: [build-web]
+    args: [push, --all-tags, ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/web]
+
+  # ── Deploy API ───────────────────────────────────────────────────────────
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-api
+    waitFor: [push-api]
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_API_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/api:$SHORT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --port=8080
+      - --set-env-vars=NODE_ENV=production,API_PREFIX=api/v1,ADMIN_URL=${_ADMIN_URL},API_URL=${_API_URL},WEB_URL=${_WEB_URL},EMAIL_VERIFICATION_ENABLED=true,DOMAIN_AUTO_VERIFY=false
+      - --set-secrets=${_API_SECRETS}
+      - --add-cloudsql-instances=${_CLOUDSQL_INSTANCE}
+
+  # ── Deploy Admin ─────────────────────────────────────────────────────────
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-admin
+    waitFor: [push-admin, deploy-api]
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_ADMIN_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/admin:$SHORT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --port=8080
+      - --set-env-vars=NODE_ENV=production,APP_BASE_URL=${_ADMIN_URL},AUTH0_DOMAIN=${_AUTH0_DOMAIN},AUTH0_CLIENT_ID=${_AUTH0_CLIENT_ID},NEXT_PUBLIC_AUTH0_DOMAIN=${_AUTH0_DOMAIN}
+      - --set-secrets=${_ADMIN_SECRETS}
+
+  # ── Deploy Web ───────────────────────────────────────────────────────────
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-web
+    waitFor: [push-web]
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_WEB_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/web:$SHORT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --port=8080
+      - --set-env-vars=NODE_ENV=production
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/api:$SHORT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/admin:$SHORT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/web:$SHORT_SHA

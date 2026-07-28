@@ -38,6 +38,10 @@ pnpm dev:admin   # http://localhost:3001
 pnpm dev:web     # http://localhost:3000
 ```
 
+## Deployment
+
+Deploy to Google Cloud (Cloud Run + Cloud SQL): see [`docs/DEPLOY-GCP.md`](./docs/DEPLOY-GCP.md).
+
 ## Sprint 1 — Foundation (Complete)
 
 - Multi-tenant organizations (create, update, soft-delete, permanent delete)
@@ -60,5 +64,6 @@ See [`docs/SPRINT-01-IMPLEMENTATION.md`](./docs/SPRINT-01-IMPLEMENTATION.md).
 | `pnpm dev:api` | API server |
 | `pnpm build` | Build all packages and apps |
 | `pnpm test` | Run all tests |
-| `pnpm db:migrate` | Run migrations |
+| `pnpm db:migrate` | Run migrations (dev) |
+| `pnpm db:migrate:deploy` | Run migrations (production) |
 | `pnpm db:seed` | Seed roles and permissions |

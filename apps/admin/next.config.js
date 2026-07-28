@@ -5,6 +5,7 @@ const { config } = require('dotenv');
 config({ path: path.join(__dirname, '../../.env') });
 
 const nextConfig = {
+  output: 'standalone',
   transpilePackages: ['@cmp/auth', '@cmp/types', '@cmp/utils'],
   outputFileTracingRoot: path.join(__dirname, '../../'),
   env: {
