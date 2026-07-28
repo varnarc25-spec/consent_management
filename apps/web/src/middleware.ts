@@ -31,7 +31,14 @@ export async function middleware(request: NextRequest) {
         });
         return NextResponse.redirect(target);
       }
-      return getAuth0().middleware(request);
+      try {
+        return await getAuth0().middleware(request);
+      } catch (err) {
+        console.error('[middleware] Auth route error:', err);
+        const home = new URL('/', request.url);
+        home.searchParams.set('login_error', 'Sign-in failed. Please try again.');
+        return NextResponse.redirect(home);
+      }
     }
 
     if (!isAuth0Configured() || !appBaseUrlMatchesHost(request.nextUrl.host)) {

@@ -1,5 +1,7 @@
+import { Suspense } from 'react';
 import { SiteHeader, ADMIN_URL } from '@/components/site-header';
 import { AuthNavLink } from '@/components/auth-nav-link';
+import { LoginErrorBanner } from '@/components/login-error-banner';
 
 export default function HomePage() {
   return (
@@ -8,6 +10,9 @@ export default function HomePage() {
 
       <main>
         <section className="hero container">
+          <Suspense fallback={null}>
+            <LoginErrorBanner />
+          </Suspense>
           <h1 style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>
             Consent management built for compliance teams
           </h1>
