@@ -1,0 +1,63 @@
+name: rmgpgab-consent-management-admin-us-central1-varnarc25-spec-ycn
+description: Build and deploy consent-management-admin with Auth0
+github:
+  owner: varnarc25-spec
+  name: consent_management
+  push:
+    branch: ^main$
+includeBuildLogs: INCLUDE_BUILD_LOGS_WITH_STATUS
+serviceAccount: projects/myweb-503314/serviceAccounts/414895350436-compute@developer.gserviceaccount.com
+substitutions:
+  _AR_HOSTNAME: us-central1-docker.pkg.dev
+  _AR_PROJECT_ID: myweb-503314
+  _AR_REPOSITORY: cloud-run-source-deploy
+  _DEPLOY_REGION: us-central1
+  _PLATFORM: managed
+  _SERVICE_NAME: consent-management-admin
+  _TRIGGER_ID: fb6ff872-9086-403a-bde0-174c146329e4
+tags:
+  - gcp-cloud-build-deploy-cloud-run
+  - gcp-cloud-build-deploy-cloud-run-managed
+  - consent-management-admin
+build:
+  images:
+    - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+  options:
+    logging: CLOUD_LOGGING_ONLY
+    substitutionOption: ALLOW_LOOSE
+  steps:
+    - name: gcr.io/cloud-builders/docker
+      id: Build
+      args:
+        - build
+        - --no-cache
+        - -t
+        - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+        - -f
+        - docker/Dockerfile.admin
+        - --build-arg
+        - NEXT_PUBLIC_API_URL=https://consent-management-api-414895350436.us-central1.run.app/api/v1
+        - --build-arg
+        - AUTH0_DOMAIN=dev-varnarc.us.auth0.com
+        - .
+    - name: gcr.io/cloud-builders/docker
+      id: Push
+      args:
+        - push
+        - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+    - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+      id: Deploy
+      entrypoint: gcloud
+      args:
+        - run
+        - services
+        - update
+        - $_SERVICE_NAME
+        - --platform=managed
+        - --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+        - --region=$_DEPLOY_REGION
+        - --port=8080
+        - --set-env-vars=NODE_ENV=production,APP_BASE_URL=https://consent-management-admin-414895350436.us-central1.run.app,AUTH0_DOMAIN=dev-varnarc.us.auth0.com,AUTH0_CLIENT_ID=StmKKHfVz6NgNRHiN1Q2OSrtFx8y3owq,NEXT_PUBLIC_AUTH0_DOMAIN=dev-varnarc.us.auth0.com
+        - --set-secrets=AUTH0_CLIENT_SECRET=AUTH0_CLIENT_SECRET:latest,AUTH0_SECRET=AUTH0_SECRET:latest
+        - --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID
+        - --quiet

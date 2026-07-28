@@ -24,6 +24,7 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @cmp/database generate
 RUN pnpm --filter @cmp/sdk build
 RUN pnpm --filter @cmp/api... build
+RUN pnpm --filter @cmp/api deploy --prod /prod/api
 
 FROM node:20-alpine AS runner
 WORKDIR /app
@@ -33,14 +34,10 @@ ENV PORT=8080
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nestjs
 
-COPY --from=builder --chown=nestjs:nodejs /app/apps/api/dist ./apps/api/dist
-COPY --from=builder --chown=nestjs:nodejs /app/apps/api/package.json ./apps/api/package.json
-COPY --from=builder --chown=nestjs:nodejs /app/package.json ./package.json
-COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nestjs:nodejs /app/packages ./packages
+COPY --from=builder --chown=nestjs:nodejs /prod/api ./
 COPY --chown=nestjs:nodejs deploy/migrate.sh ./deploy/migrate.sh
 RUN chmod +x ./deploy/migrate.sh
 
 USER nestjs
 EXPOSE 8080
-CMD ["node", "apps/api/dist/main.js"]
+CMD ["node", "dist/main.js"]
