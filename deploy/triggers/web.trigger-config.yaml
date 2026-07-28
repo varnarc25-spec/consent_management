@@ -43,6 +43,8 @@ build:
         - NEXT_PUBLIC_AUTH0_CLIENT_ID=9brZ3YvbmdNy4jzCM8g1D0M7ynGuxp8W
         - --build-arg
         - AUTH0_DOMAIN=dev-varnarc.us.auth0.com
+        - --build-arg
+        - AUTH0_AUDIENCE=https://api.consent-management.varnarc.com
         - .
     - name: gcr.io/cloud-builders/docker
       id: Push
