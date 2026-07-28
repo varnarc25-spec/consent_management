@@ -16,6 +16,8 @@ cd "$ROOT"
 PROJECT_ID="myweb-503314"
 REGION="us-central1"
 SERVICE="consent-management-api"
+IMAGE_TAG="${1:-latest}"
+IMAGE="us-central1-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/consent_management/${SERVICE}:${IMAGE_TAG}"
 
 API_URL="https://consent-management-api-414895350436.us-central1.run.app"
 ADMIN_URL="https://consent-management-admin-414895350436.us-central1.run.app"
@@ -65,10 +67,11 @@ for SECRET in DATABASE_URL JWT_ACCESS_SECRET JWT_REFRESH_SECRET; do
     --quiet
 done
 
-echo "Updating Cloud Run service: $SERVICE"
+echo "Updating Cloud Run service: $SERVICE (image: $IMAGE)"
 gcloud run services update "$SERVICE" \
   --project="$PROJECT_ID" \
   --region="$REGION" \
+  --image="$IMAGE" \
   --port=8080 \
   --set-env-vars="NODE_ENV=production,API_PREFIX=api/v1,API_URL=${API_URL},ADMIN_URL=${ADMIN_URL},EMAIL_VERIFICATION_ENABLED=false,DOMAIN_AUTO_VERIFY=false" \
   --set-secrets="DATABASE_URL=DATABASE_URL:latest,JWT_ACCESS_SECRET=JWT_ACCESS_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest"
