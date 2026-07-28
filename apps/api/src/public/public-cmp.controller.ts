@@ -173,7 +173,7 @@ export class PublicCmpController {
   async getConsentForVisitor(
     @Param('domainKey') domainKey: string,
     @Param('visitorId') visitorId: string,
-  ) {
+  ): Promise<unknown> {
     const domain = await this.repos.domains.findByDomainKey(domainKey);
     if (!domain || !domain.enabled) {
       return { ok: false, error: { code: 'NOT_FOUND', message: 'Domain not found' } };
