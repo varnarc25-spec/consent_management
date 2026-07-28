@@ -37,6 +37,12 @@ build:
         - docker/Dockerfile.web
         - --build-arg
         - NEXT_PUBLIC_ADMIN_URL=https://consent-management-admin-414895350436.us-central1.run.app
+        - --build-arg
+        - NEXT_PUBLIC_AUTH0_CONFIGURED=true
+        - --build-arg
+        - NEXT_PUBLIC_AUTH0_CLIENT_ID=StmKKHfVz6NgNRHiN1Q2OSrtFx8y3owq
+        - --build-arg
+        - AUTH0_DOMAIN=dev-varnarc.us.auth0.com
         - .
     - name: gcr.io/cloud-builders/docker
       id: Push
@@ -55,6 +61,7 @@ build:
         - --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
         - --region=$_DEPLOY_REGION
         - --port=8080
-        - --set-env-vars=NODE_ENV=production
+        - --set-env-vars=NODE_ENV=production,APP_BASE_URL=https://consent-management-web-414895350436.us-central1.run.app,AUTH0_DOMAIN=dev-varnarc.us.auth0.com,AUTH0_CLIENT_ID=StmKKHfVz6NgNRHiN1Q2OSrtFx8y3owq,NEXT_PUBLIC_AUTH0_DOMAIN=dev-varnarc.us.auth0.com,AUTH0_AUDIENCE=https://api.varnarc.com,API_URL=https://consent-management-api-414895350436.us-central1.run.app/api/v1,NEXT_PUBLIC_API_URL=https://consent-management-api-414895350436.us-central1.run.app/api/v1,NEXT_PUBLIC_ADMIN_URL=https://consent-management-admin-414895350436.us-central1.run.app,NEXT_PUBLIC_AUTH0_CONFIGURED=true,NEXT_PUBLIC_AUTH0_CLIENT_ID=StmKKHfVz6NgNRHiN1Q2OSrtFx8y3owq
+        - --set-secrets=AUTH0_CLIENT_SECRET=AUTH0_CLIENT_SECRET:latest,AUTH0_SECRET=AUTH0_SECRET:latest
         - --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID
         - --quiet

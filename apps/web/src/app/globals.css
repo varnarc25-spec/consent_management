@@ -1,13 +1,13 @@
 :root {
-  --bg: #0f1419;
-  --surface: #1a2332;
-  --border: #2d3a4f;
-  --text: #e8edf5;
-  --muted: #8b9cb3;
-  --primary: #3b82f6;
-  --primary-hover: #2563eb;
-  --danger: #ef4444;
-  --success: #22c55e;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --muted: #64748b;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --danger: #dc2626;
+  --success: #16a34a;
 }
 
 * { box-sizing: border-box; }
@@ -32,6 +32,7 @@ button, input, select, textarea { font: inherit; }
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1.5rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
 .btn {
@@ -51,9 +52,13 @@ button, input, select, textarea { font: inherit; }
 .btn:hover { background: var(--primary-hover); }
 
 .btn-secondary {
-  background: transparent;
+  background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
+}
+
+.btn-secondary:hover {
+  background: #f1f5f9;
 }
 
 .field {
@@ -91,6 +96,11 @@ button, input, select, textarea { font: inherit; }
   align-items: center;
   padding: 1rem 2rem;
   border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.site-header strong {
+  color: var(--text);
 }
 
 .site-header nav { display: flex; gap: 1.5rem; align-items: center; }

@@ -53,7 +53,7 @@ build:
         - --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
         - --region=$_DEPLOY_REGION
         - --port=8080
-        - --set-env-vars=NODE_ENV=production,API_PREFIX=api/v1,API_URL=https://consent-management-api-414895350436.us-central1.run.app,ADMIN_URL=https://consent-management-admin-414895350436.us-central1.run.app,EMAIL_VERIFICATION_ENABLED=false,DOMAIN_AUTO_VERIFY=false,AUTH0_DOMAIN=dev-varnarc.us.auth0.com,AUTH0_CLIENT_ID=StmKKHfVz6NgNRHiN1Q2OSrtFx8y3owq,AUTH0_ISSUER_URL=https://dev-varnarc.us.auth0.com/
+        - --set-env-vars=NODE_ENV=production,API_PREFIX=api/v1,API_URL=https://consent-management-api-414895350436.us-central1.run.app/api/v1,ADMIN_URL=https://consent-management-admin-414895350436.us-central1.run.app,WEB_URL=https://consent-management-web-414895350436.us-central1.run.app,EMAIL_VERIFICATION_ENABLED=false,DOMAIN_AUTO_VERIFY=false,AUTH0_DOMAIN=dev-varnarc.us.auth0.com,AUTH0_CLIENT_ID=StmKKHfVz6NgNRHiN1Q2OSrtFx8y3owq,AUTH0_ISSUER_URL=https://dev-varnarc.us.auth0.com/,AUTH0_AUDIENCE=https://api.varnarc.com
         - --set-secrets=DATABASE_URL=DATABASE_URL:latest,JWT_ACCESS_SECRET=JWT_ACCESS_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest
         - --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID
         - --quiet
