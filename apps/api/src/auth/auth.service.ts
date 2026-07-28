@@ -11,7 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { AUTH_ERROR_CODES } from '@cmp/auth';
 import { AUTH_CONFIG, JWT_CONFIG, SECURITY_CONFIG } from '@cmp/config';
-import type { AuthTokens, CurrentUser, PermissionSlug, RoleSlug } from '@cmp/types';
+import type { Auth0TokenClaims, AuthTokens, CurrentUser, PermissionSlug, RoleSlug } from '@cmp/types';
 import type { Repositories } from '@cmp/database';
 import { REPOS } from '../database/database.module';
 import { AuditService } from '../audit/audit.service';
@@ -96,6 +96,63 @@ export class AuthService {
     meta?: { ipAddress?: string; userAgent?: string },
   ): Promise<AuthTokens & { isNewUser: boolean }> {
     const profile = await this.auth0Service.verifyIdToken(idToken);
+    const { user, isNewUser } = await this.upsertAuth0User(profile, meta);
+    const tokens = await this.issueTokens(user.id, meta);
+    return { ...tokens, isNewUser };
+  }
+
+  async ensureFromAuth0Claims(claims: Auth0TokenClaims): Promise<CurrentUser> {
+    if (!claims.sub) {
+      throw new UnauthorizedException({
+        code: AUTH_ERROR_CODES.TOKEN_INVALID,
+        message: 'Invalid Auth0 token claims.',
+      });
+    }
+
+    const existing = await this.repos.users.findByAuth0Sub(claims.sub);
+    if (existing) {
+      if (existing.deletedAt || existing.status === 'DISABLED' || existing.status === 'DELETED') {
+        throw new ForbiddenException({ code: 'ACCOUNT_DISABLED', message: 'Account is disabled' });
+      }
+      return this.toCurrentUser(existing);
+    }
+
+    const { user } = await this.upsertAuth0User(this.claimsToProfile(claims));
+    return this.toCurrentUser(user);
+  }
+
+  async syncFromAuth0(
+    claims: Auth0TokenClaims,
+    meta?: { ipAddress?: string; userAgent?: string },
+  ): Promise<CurrentUser> {
+    const profile = this.claimsToProfile(claims);
+    const { user } = await this.upsertAuth0User(profile, meta);
+    return this.toCurrentUser(user);
+  }
+
+  private claimsToProfile(claims: Auth0TokenClaims) {
+    const email = claims.email ?? `${claims.sub.replace('|', '_')}@users.auth0.local`;
+    const name = claims.name ?? claims.given_name ?? email.split('@')[0] ?? 'User';
+    const parts = name.trim().split(/\s+/);
+    return {
+      sub: claims.sub,
+      email,
+      emailVerified: Boolean(claims.email_verified),
+      firstName: claims.given_name ?? parts[0] ?? 'User',
+      lastName: claims.family_name ?? (parts.length > 1 ? parts.slice(1).join(' ') : ''),
+    };
+  }
+
+  private async upsertAuth0User(
+    profile: {
+      sub: string;
+      email: string;
+      emailVerified: boolean;
+      firstName: string;
+      lastName: string;
+    },
+    meta?: { ipAddress?: string; userAgent?: string },
+  ): Promise<{ user: UserWithRoles; isNewUser: boolean }> {
     let user = await this.repos.users.findByAuth0Sub(profile.sub);
     let isNewUser = false;
 
@@ -154,8 +211,15 @@ export class AuthService {
     });
     await this.repos.users.recordLoginHistory(user.id, true, meta?.ipAddress, meta?.userAgent);
 
-    const tokens = await this.issueTokens(user.id, meta);
-    return { ...tokens, isNewUser };
+    const refreshed = await this.repos.users.findById(user.id);
+    if (!refreshed) {
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'Unable to load user account',
+      });
+    }
+
+    return { user: refreshed, isNewUser };
   }
 
   async login(

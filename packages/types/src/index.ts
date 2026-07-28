@@ -40,6 +40,16 @@ export interface AuthTokens {
   expiresIn: number;
 }
 
+export interface Auth0TokenClaims {
+  sub: string;
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  given_name?: string;
+  family_name?: string;
+  picture?: string;
+}
+
 export interface ApiResponse<T> {
   ok: true;
   data: T;

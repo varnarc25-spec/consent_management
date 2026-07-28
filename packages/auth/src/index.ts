@@ -112,6 +112,20 @@ export function isAdminRole(roles: readonly string[]): boolean {
   return hasAnyRole(roles, ['super_admin', 'org_owner', 'org_admin']);
 }
 
+export {
+  getAuth0ClientId,
+  isAuth0Configured,
+  isAuthUiEnabled,
+  getAppBaseUrl,
+  resolveAppBaseUrl,
+  resolveAppBaseUrlFromHeaders,
+  getAuth0ClientOptions,
+  appBaseUrlMatchesHost,
+  AUTH0_CALLBACK_PATH,
+  AUTH0_LOGIN_PATH,
+  AUTH0_LOGOUT_PATH,
+} from './auth0-env';
+
 export const AUTH_ERROR_CODES = {
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
   EMAIL_NOT_VERIFIED: 'EMAIL_NOT_VERIFIED',

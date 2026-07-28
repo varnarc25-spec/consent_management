@@ -10,6 +10,8 @@
     "clean": "rm -rf .next"
   },
   "dependencies": {
+    "@auth0/nextjs-auth0": "^4.25.0",
+    "@cmp/auth": "workspace:*",
     "@cmp/utils": "workspace:*",
     "next": "^15.3.4",
     "react": "^19.1.0",

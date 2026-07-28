@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CurrentUser } from '@cmp/types';
-import { apiFetch, clearStoredTokens, getStoredTokens } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 import { AdminShell } from '@/components/admin-shell';
 
 export function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -13,11 +13,7 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function load() {
-      const tokens = getStoredTokens();
-      if (!tokens) {
-        router.replace('/login');
-        return;
-      }
+      await fetch('/api/auth/sync', { method: 'POST', credentials: 'include' });
 
       const [result, authConfig] = await Promise.all([
         apiFetch<CurrentUser>('/auth/me'),
@@ -25,8 +21,7 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
       ]);
 
       if (!result.ok || !result.data) {
-        clearStoredTokens();
-        router.replace('/login');
+        window.location.href = '/auth/login';
         return;
       }
 
@@ -56,7 +51,6 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
         }>('/organizations/me/onboarding');
         if (onboarding.data && !onboarding.data.complete && onboarding.data.step < 10) {
           router.replace('/onboarding');
-          return;
         }
       }
     }

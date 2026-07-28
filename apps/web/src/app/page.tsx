@@ -1,21 +1,10 @@
-import Link from 'next/link';
-
-const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_URL ?? 'http://localhost:3001';
+import { SiteHeader, ADMIN_URL } from '@/components/site-header';
+import { AuthNavLink } from '@/components/auth-nav-link';
 
 export default function HomePage() {
   return (
     <>
-      <header className="site-header">
-        <strong>CMP</strong>
-        <nav aria-label="Site navigation">
-          <Link href="#features">Features</Link>
-          <Link href="#compliance">Compliance</Link>
-          <a href={`${ADMIN_URL}/login`}>Sign in</a>
-          <a className="btn" href={`${ADMIN_URL}/register`} style={{ padding: '0.5rem 1rem' }}>
-            Get started
-          </a>
-        </nav>
-      </header>
+      <SiteHeader />
 
       <main>
         <section className="hero container">
@@ -27,10 +16,10 @@ export default function HomePage() {
             consent records — all from one multi-tenant platform.
           </p>
           <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '2rem' }}>
-            <a className="btn" href={`${ADMIN_URL}/register`}>
+            <AuthNavLink className="btn" href="/auth/login?screen_hint=signup">
               Start free trial
-            </a>
-            <a className="btn btn-secondary" href={`${ADMIN_URL}/login`}>
+            </AuthNavLink>
+            <a className="btn btn-secondary" href={`${ADMIN_URL}/auth/login`}>
               Sign in to admin
             </a>
           </div>
@@ -76,9 +65,9 @@ export default function HomePage() {
               Geo-targeted configurations, policy versioning, and consent renewal workflows
               help you stay compliant as regulations evolve.
             </p>
-            <a className="btn" href={`${ADMIN_URL}/register`}>
+            <AuthNavLink className="btn" href="/auth/login?screen_hint=signup">
               Create your account
-            </a>
+            </AuthNavLink>
           </div>
         </section>
       </main>

@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { hasPermission, PERMISSIONS } from '@cmp/auth';
 import type { CurrentUser } from '@cmp/types';
-import { apiFetch, clearStoredTokens, getStoredTokens } from '@/lib/api';
+import { clearStoredTokens } from '@/lib/api';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', permission: null },
@@ -23,22 +23,10 @@ export function AdminShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
 
-  async function handleLogout() {
-    const tokens = getStoredTokens();
-    if (tokens?.refreshToken) {
-      await apiFetch('/auth/logout', {
-        method: 'POST',
-        body: JSON.stringify({ refreshToken: tokens.refreshToken }),
-      });
-    }
+  function handleLogout() {
     clearStoredTokens();
-    if (process.env.NEXT_PUBLIC_AUTH0_DOMAIN) {
-      window.location.href = '/auth/logout';
-      return;
-    }
-    router.push('/login');
+    window.location.href = '/auth/logout';
   }
 
   return (

@@ -64,14 +64,14 @@ gcloud run services update "$SERVICE" \
   --project="$PROJECT_ID" \
   --region="$REGION" \
   --port=8080 \
-  --set-env-vars="NODE_ENV=production,APP_BASE_URL=${ADMIN_URL},AUTH0_DOMAIN=${AUTH0_DOMAIN},AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID},NEXT_PUBLIC_AUTH0_DOMAIN=${AUTH0_DOMAIN}" \
+  --set-env-vars="NODE_ENV=production,APP_BASE_URL=${ADMIN_URL},AUTH0_DOMAIN=${AUTH0_DOMAIN},AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID},NEXT_PUBLIC_AUTH0_DOMAIN=${AUTH0_DOMAIN},AUTH0_AUDIENCE=${AUTH0_AUDIENCE:-},NEXT_PUBLIC_AUTH0_CONFIGURED=true" \
   --set-secrets="AUTH0_CLIENT_SECRET=AUTH0_CLIENT_SECRET:latest,AUTH0_SECRET=AUTH0_SECRET:latest"
 
 echo "Updating API Auth0 env vars"
 gcloud run services update consent-management-api \
   --project="$PROJECT_ID" \
   --region="$REGION" \
-  --update-env-vars="AUTH0_DOMAIN=${AUTH0_DOMAIN},AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID},AUTH0_ISSUER_URL=https://${AUTH0_DOMAIN}/,API_URL=${API_URL},ADMIN_URL=${ADMIN_URL}"
+  --update-env-vars="AUTH0_DOMAIN=${AUTH0_DOMAIN},AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID},AUTH0_ISSUER_URL=https://${AUTH0_DOMAIN}/,AUTH0_AUDIENCE=${AUTH0_AUDIENCE:-},API_URL=${API_URL},ADMIN_URL=${ADMIN_URL}"
 
 echo ""
 echo "Done. Add Auth0 callback URL if not already set:"

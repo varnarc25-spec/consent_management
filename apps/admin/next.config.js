@@ -11,6 +11,8 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_AUTH0_DOMAIN: process.env.AUTH0_DOMAIN,
+    NEXT_PUBLIC_AUTH0_CONFIGURED: process.env.AUTH0_DOMAIN ? 'true' : 'false',
+    AUTH0_AUDIENCE: process.env.AUTH0_AUDIENCE,
   },
 };
 

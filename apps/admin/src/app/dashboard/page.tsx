@@ -4,15 +4,13 @@ import { ProtectedLayout } from '@/components/protected-layout';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { CurrentUser } from '@cmp/types';
-import { apiFetch, getStoredTokens } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 
 export default function DashboardPage() {
   const [user, setUser] = useState<CurrentUser | null>(null);
 
   useEffect(() => {
-    const tokens = getStoredTokens();
-    if (!tokens) return;
-    apiFetch<CurrentUser>('/auth/me', { accessToken: tokens.accessToken }).then((r) => {
+    apiFetch<CurrentUser>('/auth/me').then((r) => {
       if (r.data) setUser(r.data);
     });
   }, []);

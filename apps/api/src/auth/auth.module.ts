@@ -5,6 +5,7 @@ import { JWT_CONFIG } from '@cmp/config';
 import { EmailModule } from '../email/email.module';
 import { AuditModule } from '../audit/audit.module';
 import { AuthController } from './auth.controller';
+import { Auth0ConfigService } from './auth0-config.service';
 import { AuthService } from './auth.service';
 import { Auth0Service } from './auth0.service';
 import { JwtStrategy } from './jwt.strategy';
@@ -20,7 +21,7 @@ import { JwtStrategy } from './jwt.strategy';
     AuditModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, Auth0Service, JwtStrategy],
+  providers: [AuthService, Auth0Service, Auth0ConfigService, JwtStrategy],
   exports: [AuthService],
 })
 export class AuthModule {}

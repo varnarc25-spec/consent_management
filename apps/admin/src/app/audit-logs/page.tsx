@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { ProtectedLayout } from '@/components/protected-layout';
-import { apiFetch, getApiUrl, getStoredTokens } from '@/lib/api';
+import { apiFetch, getApiUrl } from '@/lib/api';
 
 interface AuditItem {
   id: string;
@@ -36,14 +36,15 @@ export default function AuditLogsPage() {
     load();
   }
 
-  function onExport() {
-    const tokens = getStoredTokens();
+  async function onExport() {
+    const tokenRes = await fetch('/api/auth/access-token', { credentials: 'include' });
+    const tokenJson = (await tokenRes.json()) as { accessToken?: string };
     const params = new URLSearchParams();
     if (filters.module) params.set('module', filters.module);
     if (filters.action) params.set('action', filters.action);
     const url = `${getApiUrl()}/audit-logs/export?${params.toString()}`;
     fetch(url, {
-      headers: tokens ? { Authorization: `Bearer ${tokens.accessToken}` } : {},
+      headers: tokenJson.accessToken ? { Authorization: `Bearer ${tokenJson.accessToken}` } : {},
     })
       .then((r) => r.blob())
       .then((blob) => {
