@@ -40,9 +40,9 @@ pnpm dev:web     # http://localhost:3000
 
 ## Deployment
 
-Deploy to Google Cloud (Cloud Run + Cloud SQL): see [`docs/DEPLOY-GCP.md`](./docs/DEPLOY-GCP.md).
+Deploy to Google Cloud: [`deploy/README.md`](./deploy/README.md) (triggers, secrets, URLs).
 
-Auth0 (admin login): see [`docs/AUTH0-SETUP.md`](./docs/AUTH0-SETUP.md).
+Full guide: [`docs/DEPLOY-GCP.md`](./docs/DEPLOY-GCP.md) · Auth0: [`docs/AUTH0-SETUP.md`](./docs/AUTH0-SETUP.md).
 
 ## Sprint 1 — Foundation (Complete)
 
