@@ -18,9 +18,11 @@ RUN pnpm install --frozen-lockfile
 FROM base AS builder
 COPY --from=pruner /app/out/full/ .
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @cmp/database generate
 RUN pnpm --filter @cmp/sdk build
-RUN pnpm --filter @cmp/api build
+RUN pnpm --filter @cmp/api... build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
