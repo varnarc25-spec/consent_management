@@ -15,14 +15,12 @@ WEB_URL="https://consent-management-web-414895350436.us-central1.run.app"
 ADMIN_URL="https://consent-management-admin-414895350436.us-central1.run.app"
 API_URL="https://consent-management-api-414895350436.us-central1.run.app/api/v1"
 
-for ENV_FILE in "$ROOT/.env" "$ROOT/../../varnarc_web/project/.env"; do
-  if [[ -f "$ENV_FILE" ]]; then
-    set -a
-    # shellcheck disable=SC1090
-    source "$ENV_FILE"
-    set +a
-  fi
-done
+if [[ -f "$ROOT/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ROOT/.env"
+  set +a
+fi
 
 : "${AUTH0_DOMAIN:?AUTH0_DOMAIN is required}"
 : "${AUTH0_CLIENT_ID:?AUTH0_CLIENT_ID is required}"
@@ -74,7 +72,7 @@ gcloud run services update consent-management-admin \
   --project="$PROJECT_ID" \
   --region="$REGION" \
   --port=8080 \
-  --update-env-vars="NODE_ENV=production,APP_BASE_URL=${ADMIN_URL},AUTH0_DOMAIN=${AUTH0_DOMAIN},AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID},NEXT_PUBLIC_AUTH0_DOMAIN=${AUTH0_DOMAIN},AUTH0_AUDIENCE=${AUTH0_AUDIENCE},API_URL=${API_URL},NEXT_PUBLIC_API_URL=${API_URL},NEXT_PUBLIC_AUTH0_CONFIGURED=true" \
+  --update-env-vars="NODE_ENV=production,APP_BASE_URL=${ADMIN_URL},AUTH0_DOMAIN=${AUTH0_DOMAIN},AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID},NEXT_PUBLIC_AUTH0_DOMAIN=${AUTH0_DOMAIN},NEXT_PUBLIC_AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID},AUTH0_AUDIENCE=${AUTH0_AUDIENCE},API_URL=${API_URL},NEXT_PUBLIC_API_URL=${API_URL},NEXT_PUBLIC_AUTH0_CONFIGURED=true" \
   --set-secrets="AUTH0_CLIENT_SECRET=AUTH0_CLIENT_SECRET:latest,AUTH0_SECRET=AUTH0_SECRET:latest"
 
 echo "Updating consent-management-web..."

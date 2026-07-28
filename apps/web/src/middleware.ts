@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { isAuth0Configured, isAuthUiEnabled, appBaseUrlMatchesHost } from '@cmp/auth';
+import { isAuth0Configured, appBaseUrlMatchesHost } from '@cmp/auth';
 import { getAuth0 } from './lib/auth0';
 
 export async function middleware(request: NextRequest) {
@@ -18,33 +18,27 @@ export async function middleware(request: NextRequest) {
     }
 
     const isAuthRoute = pathname === '/auth' || pathname.startsWith('/auth/');
-    const authDomain =
-      process.env.AUTH0_DOMAIN?.trim() || process.env.NEXT_PUBLIC_AUTH0_DOMAIN?.trim();
-    const authReady =
-      isAuth0Configured() ||
-      (isAuthRoute && isAuthUiEnabled() && Boolean(authDomain));
 
-    if (isAuthRoute && !authReady) {
-      const adminUrl =
-        process.env.NEXT_PUBLIC_ADMIN_URL?.replace(/\/$/, '') ||
-        'https://consent-management-admin-414895350436.us-central1.run.app';
-      const loginPath = pathname === '/auth/logout' ? '/auth/logout' : '/auth/login';
-      const target = new URL(`${adminUrl}${loginPath}`);
-      request.nextUrl.searchParams.forEach((value, key) => {
-        target.searchParams.set(key, value);
-      });
-      return NextResponse.redirect(target);
+    if (isAuthRoute) {
+      if (!isAuth0Configured()) {
+        const adminUrl =
+          process.env.NEXT_PUBLIC_ADMIN_URL?.replace(/\/$/, '') ||
+          'https://consent-management-admin-414895350436.us-central1.run.app';
+        const loginPath = pathname === '/auth/logout' ? '/auth/logout' : '/auth/login';
+        const target = new URL(`${adminUrl}${loginPath}`);
+        request.nextUrl.searchParams.forEach((value, key) => {
+          target.searchParams.set(key, value);
+        });
+        return NextResponse.redirect(target);
+      }
+      return getAuth0().middleware(request);
     }
 
-    if (!authReady || !appBaseUrlMatchesHost(request.nextUrl.host)) {
+    if (!isAuth0Configured() || !appBaseUrlMatchesHost(request.nextUrl.host)) {
       return NextResponse.next();
     }
 
     const authResponse = await getAuth0().middleware(request);
-
-    if (isAuthRoute) {
-      return authResponse;
-    }
 
     try {
       const session = await getAuth0().getSession(request);
