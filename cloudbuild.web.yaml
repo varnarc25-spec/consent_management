@@ -11,6 +11,8 @@ steps:
       - '$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
       - '-f'
       - docker/Dockerfile.web
+      - '--build-arg'
+      - NEXT_PUBLIC_ADMIN_URL=${_ADMIN_URL}
       - .
 
   - name: gcr.io/cloud-builders/docker
@@ -41,3 +43,6 @@ images:
 options:
   substitutionOption: ALLOW_LOOSE
   logging: CLOUD_LOGGING_ONLY
+
+substitutions:
+  _ADMIN_URL: https://consent-management-admin-414895350436.us-central1.run.app

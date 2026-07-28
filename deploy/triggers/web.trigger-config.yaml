@@ -35,6 +35,8 @@ build:
         - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
         - -f
         - docker/Dockerfile.web
+        - --build-arg
+        - NEXT_PUBLIC_ADMIN_URL=https://consent-management-admin-414895350436.us-central1.run.app
         - .
     - name: gcr.io/cloud-builders/docker
       id: Push
