@@ -30,6 +30,11 @@ done
 : "${AUTH0_AUDIENCE:?AUTH0_AUDIENCE is required}"
 AUTH0_SECRET="${AUTH0_SECRET:-$(openssl rand -hex 32)}"
 
+# Keep CMP service URLs — sourced .env files may point at varnarc.com
+WEB_URL="https://consent-management-web-414895350436.us-central1.run.app"
+ADMIN_URL="https://consent-management-admin-414895350436.us-central1.run.app"
+API_URL="https://consent-management-api-414895350436.us-central1.run.app/api/v1"
+
 gcloud config set project "$PROJECT_ID"
 
 create_or_update_secret() {

@@ -1,4 +1,4 @@
-import { auth0 } from '@/lib/auth0';
+import { getAuth0 } from '@/lib/auth0';
 import { getApiBaseUrl } from '@/lib/runtime-public-env';
 import type { ApiResult } from '@cmp/utils';
 
@@ -7,7 +7,7 @@ export { getApiBaseUrl, getRuntimePublicEnvScript } from '@/lib/runtime-public-e
 export async function getApiAccessToken(): Promise<string | null> {
   try {
     const audience = process.env.AUTH0_AUDIENCE;
-    const result = await auth0.getAccessToken(audience ? { audience } : undefined);
+    const result = await getAuth0().getAccessToken(audience ? { audience } : undefined);
     return result?.token ?? null;
   } catch (error) {
     console.error('[auth] getAccessToken failed', error);

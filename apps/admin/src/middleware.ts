@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { isAuth0Configured, resolveAppBaseUrl } from '@cmp/auth';
-import { auth0 } from './lib/auth0';
+import { getAuth0 } from './lib/auth0';
 
 const PUBLIC = ['/auth'];
 
@@ -50,14 +50,14 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    const authResponse = await auth0.middleware(request);
+    const authResponse = await getAuth0().middleware(request);
 
     if (isPublicPath(pathname)) {
       authResponse.headers.set('x-middleware-pathname', pathname);
       return authResponse;
     }
 
-    const session = await auth0.getSession(request);
+    const session = await getAuth0().getSession(request);
     if (!session?.user) {
       const login = new URL('/auth/login', request.url);
       const path = request.nextUrl.pathname + request.nextUrl.search;
@@ -67,7 +67,7 @@ export async function middleware(request: NextRequest) {
 
     try {
       const audience = process.env.AUTH0_AUDIENCE;
-      await auth0.getAccessToken(request, authResponse as NextResponse, {
+      await getAuth0().getAccessToken(request, authResponse as NextResponse, {
         ...(audience ? { audience } : {}),
       });
     } catch {

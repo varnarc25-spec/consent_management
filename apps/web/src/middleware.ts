@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { isAuth0Configured, isAuthUiEnabled, appBaseUrlMatchesHost } from '@cmp/auth';
-import { auth0 } from './lib/auth0';
+import { getAuth0 } from './lib/auth0';
 
 export async function middleware(request: NextRequest) {
   try {
@@ -18,25 +18,39 @@ export async function middleware(request: NextRequest) {
     }
 
     const isAuthRoute = pathname === '/auth' || pathname.startsWith('/auth/');
+    const authDomain =
+      process.env.AUTH0_DOMAIN?.trim() || process.env.NEXT_PUBLIC_AUTH0_DOMAIN?.trim();
     const authReady =
       isAuth0Configured() ||
-      (isAuthRoute && isAuthUiEnabled() && Boolean(process.env.AUTH0_DOMAIN?.trim()));
+      (isAuthRoute && isAuthUiEnabled() && Boolean(authDomain));
+
+    if (isAuthRoute && !authReady) {
+      const adminUrl =
+        process.env.NEXT_PUBLIC_ADMIN_URL?.replace(/\/$/, '') ||
+        'https://consent-management-admin-414895350436.us-central1.run.app';
+      const loginPath = pathname === '/auth/logout' ? '/auth/logout' : '/auth/login';
+      const target = new URL(`${adminUrl}${loginPath}`);
+      request.nextUrl.searchParams.forEach((value, key) => {
+        target.searchParams.set(key, value);
+      });
+      return NextResponse.redirect(target);
+    }
 
     if (!authReady || !appBaseUrlMatchesHost(request.nextUrl.host)) {
       return NextResponse.next();
     }
 
-    const authResponse = await auth0.middleware(request);
+    const authResponse = await getAuth0().middleware(request);
 
     if (isAuthRoute) {
       return authResponse;
     }
 
     try {
-      const session = await auth0.getSession(request);
+      const session = await getAuth0().getSession(request);
       if (session) {
         const audience = process.env.AUTH0_AUDIENCE;
-        await auth0.getAccessToken(request, authResponse as NextResponse, {
+        await getAuth0().getAccessToken(request, authResponse as NextResponse, {
           ...(audience ? { audience } : {}),
         });
       }
