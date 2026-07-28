@@ -40,18 +40,6 @@ export async function middleware(request: NextRequest) {
 
     const authResponse = await getAuth0().middleware(request);
 
-    try {
-      const session = await getAuth0().getSession(request);
-      if (session) {
-        const audience = process.env.AUTH0_AUDIENCE;
-        await getAuth0().getAccessToken(request, authResponse as NextResponse, {
-          ...(audience ? { audience } : {}),
-        });
-      }
-    } catch {
-      // Optional auth on marketing site
-    }
-
     return authResponse;
   } catch (err) {
     console.error('[middleware] Fatal auth error:', err);
