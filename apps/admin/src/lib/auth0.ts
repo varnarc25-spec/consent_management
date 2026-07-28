@@ -9,7 +9,7 @@ export function getAuth0() {
       ...getAuth0ClientOptions(),
       authorizationParameters: {
         scope: 'openid profile email',
-        ...(process.env.AUTH0_AUDIENCE ? { audience: process.env.AUTH0_AUDIENCE } : {}),
+        // Login uses identity only; CMP API tokens are issued via /auth/auth0/callback after sync.
       },
     });
   }

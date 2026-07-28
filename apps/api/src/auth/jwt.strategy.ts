@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { passportJwtSecret } from 'jwks-rsa';
+import jwt from 'jsonwebtoken';
 import { AUTH_ERROR_CODES } from '@cmp/auth';
 import { JWT_CONFIG } from '@cmp/config';
 import type { Auth0TokenClaims, CurrentUser } from '@cmp/types';
@@ -17,6 +18,7 @@ interface CmpJwtPayload {
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   private readonly auth0Mode: boolean;
+  private readonly auth0Audience: string;
 
   constructor(
     private readonly auth0Config: Auth0ConfigService,
@@ -24,47 +26,70 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   ) {
     const config = auth0Config.getConfig();
     const auth0Mode = config.configured;
+    const jwksProvider = auth0Mode
+      ? passportJwtSecret({
+          cache: true,
+          rateLimit: true,
+          jwksRequestsPerMinute: 10,
+          jwksUri: `https://${config.domain}/.well-known/jwks.json`,
+        })
+      : null;
 
-    super(
-      auth0Mode
-        ? {
-            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-            audience: config.audience,
-            issuer: config.issuer,
-            algorithms: ['RS256'],
-            secretOrKeyProvider: passportJwtSecret({
-              cache: true,
-              rateLimit: true,
-              jwksRequestsPerMinute: 10,
-              jwksUri: `https://${config.domain}/.well-known/jwks.json`,
-            }),
-          }
-        : {
-            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-            ignoreExpiration: false,
-            secretOrKey: JWT_CONFIG.accessSecret(),
-            algorithms: ['HS256'],
-          },
-    );
+    super({
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ignoreExpiration: false,
+      algorithms: ['HS256', 'RS256'],
+      secretOrKeyProvider: (request, rawJwtToken, done) => {
+        const decoded = jwt.decode(rawJwtToken, { complete: true });
+        if (!decoded || typeof decoded === 'string') {
+          done(new UnauthorizedException({ code: 'TOKEN_INVALID', message: 'Invalid token' }));
+          return;
+        }
+
+        if (decoded.header.alg === 'HS256') {
+          done(null, JWT_CONFIG.accessSecret());
+          return;
+        }
+
+        if (!jwksProvider) {
+          done(
+            new UnauthorizedException({ code: 'TOKEN_INVALID', message: 'Invalid token type' }),
+          );
+          return;
+        }
+
+        jwksProvider(request, rawJwtToken, done);
+      },
+    });
 
     this.auth0Mode = auth0Mode;
+    this.auth0Audience = config.audience;
   }
 
   async validate(payload: Auth0TokenClaims | CmpJwtPayload): Promise<CurrentUser> {
-    if (this.auth0Mode) {
-      if (!payload?.sub) {
-        throw new UnauthorizedException({
-          code: AUTH_ERROR_CODES.TOKEN_INVALID,
-          message: 'Authentication required.',
-        });
-      }
-      return this.authService.ensureFromAuth0Claims(payload as Auth0TokenClaims);
+    const cmpPayload = payload as CmpJwtPayload;
+    if (cmpPayload.type === 'access') {
+      return this.authService.getCurrentUser(cmpPayload.sub);
     }
 
-    const cmpPayload = payload as CmpJwtPayload;
-    if (cmpPayload.type !== 'access') {
-      throw new UnauthorizedException({ code: 'TOKEN_INVALID', message: 'Invalid token type' });
+    if (!payload?.sub) {
+      throw new UnauthorizedException({
+        code: AUTH_ERROR_CODES.TOKEN_INVALID,
+        message: 'Authentication required.',
+      });
     }
-    return this.authService.getCurrentUser(cmpPayload.sub);
+
+    if (this.auth0Mode && this.auth0Audience) {
+      const aud = (payload as jwt.JwtPayload).aud;
+      const audiences = Array.isArray(aud) ? aud : aud ? [aud] : [];
+      if (!audiences.includes(this.auth0Audience)) {
+        throw new UnauthorizedException({
+          code: AUTH_ERROR_CODES.TOKEN_INVALID,
+          message: 'Invalid token audience.',
+        });
+      }
+    }
+
+    return this.authService.ensureFromAuth0Claims(payload as Auth0TokenClaims);
   }
 }

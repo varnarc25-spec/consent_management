@@ -1,10 +1,16 @@
+import { cookies } from 'next/headers';
 import { getAuth0 } from '@/lib/auth0';
-import { getApiBaseUrl } from '@/lib/runtime-public-env';
+import { ACCESS_COOKIE } from '@/app/api/auth/sync/route';
+import { getApiBaseUrl, getRuntimePublicEnvScript } from '@/lib/runtime-public-env';
 import type { ApiResult } from '@cmp/utils';
 
 export { getApiBaseUrl, getRuntimePublicEnvScript } from '@/lib/runtime-public-env';
 
 export async function getApiAccessToken(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const cmpToken = cookieStore.get(ACCESS_COOKIE)?.value;
+  if (cmpToken) return cmpToken;
+
   try {
     const audience = process.env.AUTH0_AUDIENCE;
     const result = await getAuth0().getAccessToken(audience ? { audience } : undefined);

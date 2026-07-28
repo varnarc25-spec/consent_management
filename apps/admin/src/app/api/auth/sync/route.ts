@@ -1,6 +1,31 @@
 import { getAuth0 } from '@/lib/auth0';
-import { apiServerFetch } from '@/lib/api';
+import { getApiBaseUrl } from '@/lib/runtime-public-env';
 import { NextResponse } from 'next/server';
+import type { SessionData } from '@auth0/nextjs-auth0/types';
+
+const ACCESS_COOKIE = 'cmp_access_token';
+const REFRESH_COOKIE = 'cmp_refresh_token';
+
+function setCmpTokenCookies(
+  response: NextResponse,
+  tokens: { accessToken: string; refreshToken: string },
+) {
+  const secure = process.env.NODE_ENV === 'production';
+  response.cookies.set(ACCESS_COOKIE, tokens.accessToken, {
+    httpOnly: true,
+    secure,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 15 * 60,
+  });
+  response.cookies.set(REFRESH_COOKIE, tokens.refreshToken, {
+    httpOnly: true,
+    secure,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 7 * 24 * 60 * 60,
+  });
+}
 
 export async function POST() {
   const session = await getAuth0().getSession();
@@ -8,28 +33,38 @@ export async function POST() {
     return NextResponse.json({ ok: false, error: 'No session' }, { status: 401 });
   }
 
-  const user = session.user as {
-    sub?: string;
-    email?: string;
-    email_verified?: boolean;
-    name?: string;
-    given_name?: string;
-    family_name?: string;
-    picture?: string;
+  const idToken = (session as SessionData).tokenSet?.idToken;
+  if (!idToken) {
+    return NextResponse.json({ ok: false, error: 'No id token' }, { status: 401 });
+  }
+
+  const apiUrl = getApiBaseUrl();
+  let res: Response;
+  try {
+    res = await fetch(`${apiUrl}/auth/auth0/callback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken }),
+      cache: 'no-store',
+    });
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: { code: 'NETWORK_ERROR', message: 'API unreachable' } },
+      { status: 502 },
+    );
+  }
+
+  const result = (await res.json()) as {
+    ok: boolean;
+    data?: { accessToken: string; refreshToken: string };
+    error?: { message?: string };
   };
 
-  const result = await apiServerFetch('/auth/sync', {
-    method: 'POST',
-    body: JSON.stringify({
-      sub: user.sub,
-      email: user.email,
-      email_verified: user.email_verified,
-      name: user.name,
-      given_name: user.given_name,
-      family_name: user.family_name,
-      picture: user.picture,
-    }),
-  });
-
-  return NextResponse.json(result, { status: result.ok ? 200 : 401 });
+  const response = NextResponse.json(result, { status: result.ok ? 200 : 401 });
+  if (result.ok && result.data?.accessToken && result.data?.refreshToken) {
+    setCmpTokenCookies(response, result.data);
+  }
+  return response;
 }
+
+export { ACCESS_COOKIE, REFRESH_COOKIE };
