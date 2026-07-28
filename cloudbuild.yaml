@@ -28,7 +28,7 @@ steps:
     args:
       - build
       - -f
-      - Dockerfile.api
+      - docker/Dockerfile.api
       - -t
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/api:$SHORT_SHA
       - -t
@@ -40,7 +40,7 @@ steps:
     args:
       - build
       - -f
-      - Dockerfile.admin
+      - docker/Dockerfile.admin
       - --build-arg
       - NEXT_PUBLIC_API_URL=${_NEXT_PUBLIC_API_URL}
       - --build-arg
@@ -56,7 +56,7 @@ steps:
     args:
       - build
       - -f
-      - Dockerfile.web
+      - docker/Dockerfile.web
       - -t
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/web:$SHORT_SHA
       - -t

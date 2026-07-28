@@ -21,7 +21,7 @@
     "test": "turbo run test",
     "db:generate": "pnpm --filter @cmp/database generate",
     "db:migrate": "pnpm --filter @cmp/database migrate:dev",
-    "db:migrate:deploy": "pnpm --filter @cmp/database migrate:deploy",
+    "db:migrate:deploy": "prisma migrate deploy --schema=packages/database/prisma/schema.prisma",
     "db:seed": "pnpm --filter @cmp/database seed",
     "clean": "turbo run clean && rm -rf node_modules"
   },

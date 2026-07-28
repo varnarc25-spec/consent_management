@@ -6,9 +6,9 @@ This guide deploys the Consent Management Platform to **Cloud Run** with **Cloud
 
 | Service | Cloud Run name | Dockerfile |
 |---------|----------------|------------|
-| NestJS API | `cmp-api` | `Dockerfile.api` |
-| Admin dashboard | `cmp-admin` | `Dockerfile.admin` |
-| Marketing site | `cmp-web` | `Dockerfile.web` |
+| NestJS API | `cmp-api` | `docker/Dockerfile.api` |
+| Admin dashboard | `cmp-admin` | `docker/Dockerfile.admin` |
+| Marketing site | `cmp-web` | `docker/Dockerfile.web` |
 | PostgreSQL | Cloud SQL `cmp-db` | — |
 
 ```
@@ -168,19 +168,19 @@ _AUTH0_CLIENT_ID=your-client-id
 gcloud auth configure-docker ${REGION}-docker.pkg.dev
 
 # API
-docker build -f Dockerfile.api \
+docker build -f docker/Dockerfile.api \
   -t ${REGION}-docker.pkg.dev/$PROJECT_ID/cmp/api:latest .
 docker push ${REGION}-docker.pkg.dev/$PROJECT_ID/cmp/api:latest
 
 # Admin (build-time env for Next.js public vars)
-docker build -f Dockerfile.admin \
+docker build -f docker/Dockerfile.admin \
   --build-arg NEXT_PUBLIC_API_URL=https://api.yourdomain.com/api/v1 \
   --build-arg AUTH0_DOMAIN=your-tenant.us.auth0.com \
   -t ${REGION}-docker.pkg.dev/$PROJECT_ID/cmp/admin:latest .
 docker push ${REGION}-docker.pkg.dev/$PROJECT_ID/cmp/admin:latest
 
 # Web
-docker build -f Dockerfile.web \
+docker build -f docker/Dockerfile.web \
   -t ${REGION}-docker.pkg.dev/$PROJECT_ID/cmp/web:latest .
 docker push ${REGION}-docker.pkg.dev/$PROJECT_ID/cmp/web:latest
 ```
@@ -291,7 +291,7 @@ Add the DNS records Google provides to your domain registrar.
 
 ```bash
 # Build API image
-docker build -f Dockerfile.api -t cmp-api:local .
+docker build -f docker/Dockerfile.api -t cmp-api:local .
 
 # Run against local postgres (from docker compose)
 docker run --rm -p 8080:8080 \
@@ -309,6 +309,18 @@ docker run --rm -p 8080:8080 \
 | Admin Auth0 redirect error | Check callback URL matches `APP_BASE_URL` |
 | CORS errors | Set `ADMIN_URL` on API to exact admin origin |
 | `NEXT_PUBLIC_*` wrong in admin | Rebuild admin image with correct build args |
+| `path "docker" not found` | Set build context to `.` (repo root), not `docker` — see note below |
+
+### Cloud Build trigger settings (GCP Console)
+
+If you created the trigger manually (not via `cloudbuild.yaml`), use:
+
+| Setting | Value |
+|---------|--------|
+| **Build context** | `.` (repository root) |
+| **Dockerfile path** | `docker/Dockerfile.api` (or `.admin` / `.web`) |
+
+Do **not** set the build context to `docker` — the Dockerfiles need the full monorepo as context (`apps/`, `packages/`, `pnpm-lock.yaml`, etc.).
 | Migrations fail | Run `cmp-migrate` job; check Cloud SQL user permissions |
 
 ## Cost estimate (low traffic)
@@ -324,9 +336,9 @@ docker run --rm -p 8080:8080 \
 
 | File | Purpose |
 |------|---------|
-| `Dockerfile.api` | NestJS API image |
-| `Dockerfile.admin` | Next.js admin image |
-| `Dockerfile.web` | Next.js marketing site image |
+| `docker/Dockerfile.api` | NestJS API image |
+| `docker/Dockerfile.admin` | Next.js admin image |
+| `docker/Dockerfile.web` | Next.js marketing site image |
 | `cloudbuild.yaml` | Cloud Build CI/CD pipeline |
 | `deploy/gcp.env.example` | Substitution variable template |
 | `deploy/migrate.sh` | Prisma migrate for Cloud Run Job |
