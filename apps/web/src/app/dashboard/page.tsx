@@ -14,6 +14,7 @@ interface Domain {
   hostname: string;
   verificationStatus: string;
   domainType: string;
+  enabled: boolean;
 }
 
 export default function DashboardPage() {
@@ -45,71 +46,102 @@ export default function DashboardPage() {
     });
   }
 
+  const verifiedCount = domains.filter((d) => d.verificationStatus === 'VERIFIED').length;
+
   return (
     <ProtectedLayout>
-      <h1>Dashboard</h1>
-      <p style={{ color: 'var(--muted)' }}>
-        Welcome{user ? `, ${user.firstName}` : ''}. Manage your consent platform from here.
-      </p>
-
-      {message && <p className="success" style={{ marginTop: '1rem' }}>{message}</p>}
-
-      <SetupGuide
-        hasOrganization={Boolean(user?.organizationId)}
-        hasDomains={domains.length > 0}
-        adminUrl={adminUrl}
-        onAddDomain={() => setShowDomainForm(true)}
-      />
-
-      <section style={{ marginTop: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Your websites</h2>
-          <button className="btn" type="button" onClick={() => setShowDomainForm((v) => !v)}>
-            {showDomainForm ? 'Cancel' : 'Add website'}
-          </button>
+      <div className="page-header">
+        <div>
+          <h1>Dashboard</h1>
+          <p className="page-subtitle">
+            Welcome{user ? `, ${user.firstName}` : ''}. Manage websites and track your consent setup.
+          </p>
         </div>
+        <button className="btn" type="button" onClick={() => setShowDomainForm((v) => !v)}>
+          {showDomainForm ? 'Cancel' : 'Add website'}
+        </button>
+      </div>
 
-        {showDomainForm && (
-          <div style={{ marginTop: '1rem' }}>
+      {message && <p className="success page-alert">{message}</p>}
+
+      <div className="stat-grid">
+        <div className="stat-card">
+          <span className="stat-label">Organization</span>
+          <span className="stat-value">{user?.organizationId ? 'Active' : 'Not created'}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Websites</span>
+          <span className="stat-value">{domains.length}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Verified</span>
+          <span className="stat-value">{verifiedCount}</span>
+        </div>
+      </div>
+
+      <div className="panel-grid">
+        <section className="panel-main">
+          {showDomainForm && (
             <AddDomainForm
               hasOrganization={Boolean(user?.organizationId)}
               onSuccess={handleDomainAdded}
               onCancel={() => setShowDomainForm(false)}
             />
-          </div>
-        )}
-
-        <div className="card" style={{ marginTop: '1rem', overflowX: 'auto' }}>
-          {domains.length === 0 ? (
-            <p style={{ color: 'var(--muted)', margin: 0 }}>
-              No websites yet. Click <strong>Add website</strong> to register your first domain.
-            </p>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Domain</th>
-                  <th>Type</th>
-                  <th>Verification</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {domains.map((domain) => (
-                  <tr key={domain.id}>
-                    <td>{domain.hostname}</td>
-                    <td>{domain.domainType}</td>
-                    <td>{domain.verificationStatus}</td>
-                    <td>
-                      <Link href={`${adminUrl}/domains/${domain.id}`}>Manage</Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           )}
-        </div>
-      </section>
+
+          <div className="card" style={{ marginTop: showDomainForm ? '1rem' : 0, overflowX: 'auto' }}>
+            <div className="card-header">
+              <h2>Websites</h2>
+              <span className="card-meta">{domains.length} total</span>
+            </div>
+            {domains.length === 0 ? (
+              <p className="empty-state">
+                No websites registered yet. Click <strong>Add website</strong> to get started.
+              </p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Hostname</th>
+                    <th>Type</th>
+                    <th>Verification</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {domains.map((domain) => (
+                    <tr key={domain.id}>
+                      <td>
+                        <strong>{domain.hostname}</strong>
+                      </td>
+                      <td>{domain.domainType}</td>
+                      <td>
+                        <span className={`status-pill status-${domain.verificationStatus.toLowerCase()}`}>
+                          {domain.verificationStatus}
+                        </span>
+                      </td>
+                      <td>{domain.enabled ? 'Enabled' : 'Disabled'}</td>
+                      <td>
+                        <Link href={`${adminUrl}/domains/${domain.id}`}>Manage</Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+
+        <aside className="panel-side">
+          <SetupGuide
+            hasOrganization={Boolean(user?.organizationId)}
+            hasDomains={domains.length > 0}
+            adminUrl={adminUrl}
+            onAddDomain={() => setShowDomainForm(true)}
+          />
+        </aside>
+      </div>
     </ProtectedLayout>
   );
 }

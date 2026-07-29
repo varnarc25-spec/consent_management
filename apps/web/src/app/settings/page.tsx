@@ -33,10 +33,17 @@ export default function SettingsPage() {
 
   return (
     <ProtectedLayout>
-      <h1>Settings</h1>
+      <div className="page-header">
+        <div>
+          <h1>Settings</h1>
+          <p className="page-subtitle">Security preferences and login activity.</p>
+        </div>
+      </div>
 
-      <div className="card" style={{ marginTop: '1.5rem' }}>
-        <h3>Security</h3>
+      <div className="card">
+        <div className="card-header">
+          <h2>Security</h2>
+        </div>
         <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
           Revoke all active sessions across every device.
         </p>
@@ -47,7 +54,9 @@ export default function SettingsPage() {
       </div>
 
       <div className="card" style={{ marginTop: '1.5rem', overflowX: 'auto' }}>
-        <h3>Login activity</h3>
+        <div className="card-header">
+          <h2>Login activity</h2>
+        </div>
         <table>
           <thead>
             <tr>

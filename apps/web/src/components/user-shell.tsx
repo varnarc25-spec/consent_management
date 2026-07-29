@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { CurrentUser } from '@cmp/types';
 import { clearStoredTokens } from '@/lib/api';
+import { getAdminUrl } from '@/lib/admin-url';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -18,6 +19,7 @@ export function UserShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const adminUrl = getAdminUrl();
 
   function handleLogout() {
     clearStoredTokens();
@@ -25,34 +27,34 @@ export function UserShell({
   }
 
   return (
-    <>
-      <header className="site-header">
-        <Link href="/" style={{ color: 'var(--text)', textDecoration: 'none' }}>
-          <strong>CMP</strong>
-        </Link>
-        <nav aria-label="Account navigation" style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+    <div className="portal-layout">
+      <header className="nav" role="banner">
+        <strong>CMP Portal</strong>
+        <nav aria-label="Main navigation" className="nav-links">
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              style={{
-                color: pathname === item.href ? 'var(--primary)' : 'var(--muted)',
-                textDecoration: 'none',
-                fontWeight: pathname === item.href ? 600 : 400,
-              }}
+              aria-current={pathname === item.href ? 'page' : undefined}
+              className={pathname === item.href ? 'active' : undefined}
             >
               {item.label}
             </Link>
           ))}
-          <span style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
+        </nav>
+        <div className="nav-actions">
+          <a className="nav-external" href={adminUrl} target="_blank" rel="noreferrer">
+            Admin console
+          </a>
+          <span className="nav-user">
             {user.firstName} {user.lastName}
           </span>
-          <button className="btn btn-secondary" onClick={handleLogout} type="button" style={{ padding: '0.4rem 0.75rem' }}>
-            Sign out
+          <button className="btn btn-secondary" onClick={handleLogout} type="button">
+            Logout
           </button>
-        </nav>
+        </div>
       </header>
-      <main className="container">{children}</main>
-    </>
+      <main className="container portal-main">{children}</main>
+    </div>
   );
 }

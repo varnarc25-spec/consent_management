@@ -66,7 +66,9 @@ export function AddDomainForm({
 
   return (
     <form className="card add-domain-form" onSubmit={onSubmit}>
-      <h3 style={{ marginTop: 0 }}>Add website</h3>
+      <div className="card-header">
+        <h2>Add website</h2>
+      </div>
       <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginTop: 0 }}>
         Fields marked <strong>*</strong> are required for this website.
       </p>
