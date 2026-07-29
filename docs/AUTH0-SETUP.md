@@ -1,16 +1,17 @@
 # Auth0 setup
 
-Auth0 handles **sign-up / sign-in** for the admin dashboard. After Auth0 login, the admin app exchanges the Auth0 ID token for CMP JWT tokens via the API.
+Auth0 handles **sign-up / sign-in** for the **web** (user portal) and **admin** (org console). Both apps share the same Auth0 application (`consent_mngt`). After login, each app exchanges the Auth0 ID token for CMP JWT tokens via the API.
 
 ## Architecture
 
 ```text
-User → Admin (Auth0 login) → /auth/sync → API /auth/auth0/callback → CMP JWT
+User → Web or Admin (Auth0 login) → /auth/sync → API /auth/auth0/callback → CMP JWT
 ```
 
 | Component | Auth0 role |
 |-----------|----------------|
-| **Admin** (`apps/admin`) | Auth0 Regular Web App — login UI, session cookie |
+| **Web** (`apps/web`) | User portal — dashboard, settings, onboarding |
+| **Admin** (`apps/admin`) | Org console — domains, users, audit logs |
 | **API** (`apps/api`) | Verifies Auth0 ID tokens (JWKS) — needs domain + client ID only |
 
 ---
@@ -33,19 +34,21 @@ Copy from the **Settings** tab:
 
 ## Step 2 — Application URLs (Auth0 Dashboard)
 
-Use your **admin** Cloud Run URL (not the API URL).
+Open **Applications** → **consent_mngt** → **Settings**.
 
-**Production** (replace if your admin URL differs):
+**Production** — add **both** web and admin URLs (comma-separated on each line):
 
 | Setting | Value |
 |---------|--------|
-| **Allowed Callback URLs** | `https://consent-management-admin-414895350436.us-central1.run.app/auth/callback` |
-| **Allowed Logout URLs** | `https://consent-management-admin-414895350436.us-central1.run.app` |
-| **Allowed Web Origins** | `https://consent-management-admin-414895350436.us-central1.run.app` |
+| **Allowed Callback URLs** | `https://consent-management-web-414895350436.us-central1.run.app/auth/callback`, `https://consent-management-admin-414895350436.us-central1.run.app/auth/callback` |
+| **Allowed Logout URLs** | `https://consent-management-web-414895350436.us-central1.run.app`, `https://consent-management-admin-414895350436.us-central1.run.app` |
+| **Allowed Web Origins** | `https://consent-management-web-414895350436.us-central1.run.app`, `https://consent-management-admin-414895350436.us-central1.run.app` |
 
 **Local development** — add these on the same lines (comma-separated):
 
 ```text
+http://localhost:3000/auth/callback
+http://localhost:3000
 http://localhost:3001/auth/callback
 http://localhost:3001
 ```
@@ -67,6 +70,16 @@ Save as `AUTH0_SECRET`.
 ---
 
 ## Step 4 — Environment variables
+
+### Web (`consent-management-web`)
+
+| Variable | Where | Example |
+|----------|--------|---------|
+| `AUTH0_DOMAIN` | Env var | `dev-varnarc.us.auth0.com` |
+| `CM_AUTH0_CLIENT_ID` | **Secret Manager** | CMP-dedicated Auth0 app client ID |
+| `CM_AUTH0_CLIENT_SECRET` | **Secret Manager** | CMP-dedicated Auth0 app client secret |
+| `AUTH0_SECRET` | **Secret Manager** | `openssl rand -hex 32` |
+| `APP_BASE_URL` | Env var | `https://consent-management-web-414895350436.us-central1.run.app` |
 
 ### Admin (`consent-management-admin`)
 
@@ -107,7 +120,7 @@ openssl rand -hex 32 | gcloud secrets create AUTH0_SECRET --data-file=-
 PROJECT_NUMBER=$(gcloud projects describe myweb-503314 --format='value(projectNumber)')
 SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
-for S in AUTH0_CLIENT_SECRET AUTH0_SECRET; do
+for S in CM_AUTH0_CLIENT_ID CM_AUTH0_CLIENT_SECRET AUTH0_SECRET; do
   gcloud secrets add-iam-policy-binding $S \
     --member="serviceAccount:$SA" \
     --role="roles/secretmanager.secretAccessor"
@@ -133,7 +146,8 @@ NEXT_PUBLIC_AUTH0_DOMAIN=YOUR_TENANT.us.auth0.com
 **Secrets:**
 
 ```text
-AUTH0_CLIENT_SECRET → AUTH0_CLIENT_SECRET:latest
+CM_AUTH0_CLIENT_ID → CM_AUTH0_CLIENT_ID:latest
+CM_AUTH0_CLIENT_SECRET → CM_AUTH0_CLIENT_SECRET:latest
 AUTH0_SECRET → AUTH0_SECRET:latest
 ```
 
@@ -184,7 +198,7 @@ gcloud run services update consent-management-api \
 
 | Issue | Fix |
 |-------|-----|
-| `Callback URL mismatch` | Add exact `/auth/callback` URL in Auth0 app settings |
+| `Callback URL mismatch` | Add **both** web and admin `/auth/callback` URLs in Auth0 (see Step 2). The exact URL is shown in the Auth0 error — it must match character-for-character. |
 | `AUTH0_NOT_CONFIGURED` | Set all four admin env vars + secrets |
 | Login works but sync fails | Check API has `AUTH0_DOMAIN` + `AUTH0_CLIENT_ID`; API must be running |
 | `USE_AUTH0` on email login | Expected when Auth0 is enabled — use Auth0 button |

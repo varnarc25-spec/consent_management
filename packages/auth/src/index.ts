@@ -114,6 +114,7 @@ export function isAdminRole(roles: readonly string[]): boolean {
 
 export {
   getAuth0ClientId,
+  getAuth0ClientSecret,
   isAuth0Configured,
   isAuthUiEnabled,
   getAppBaseUrl,

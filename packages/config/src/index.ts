@@ -61,7 +61,9 @@ export const AUTH_CONFIG = {
 
 export const AUTH0_CONFIG = {
   get enabled() {
-    return Boolean(process.env.AUTH0_DOMAIN?.trim() && process.env.AUTH0_CLIENT_ID?.trim());
+    const clientId =
+      process.env.CM_AUTH0_CLIENT_ID?.trim() || process.env.AUTH0_CLIENT_ID?.trim();
+    return Boolean(process.env.AUTH0_DOMAIN?.trim() && clientId);
   },
   get apiAuthEnabled() {
     return Boolean(
@@ -71,7 +73,9 @@ export const AUTH0_CONFIG = {
     );
   },
   domain: process.env.AUTH0_DOMAIN?.trim() ?? '',
-  clientId: process.env.AUTH0_CLIENT_ID?.trim() ?? '',
+  get clientId() {
+    return process.env.CM_AUTH0_CLIENT_ID?.trim() || process.env.AUTH0_CLIENT_ID?.trim() || '';
+  },
   audience: process.env.AUTH0_AUDIENCE?.trim() ?? '',
   get issuerUrl() {
     const explicit = process.env.AUTH0_ISSUER_URL?.trim() || process.env.AUTH0_ISSUER_BASE_URL?.trim();

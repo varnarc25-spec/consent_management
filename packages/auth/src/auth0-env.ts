@@ -5,14 +5,28 @@
 export function getAuth0ClientId(
   env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
 ): string | undefined {
-  return env.AUTH0_CLIENT_ID?.trim() || env.NEXT_PUBLIC_AUTH0_CLIENT_ID?.trim() || undefined;
+  return (
+    env.CM_AUTH0_CLIENT_ID?.trim() ||
+    env.AUTH0_CLIENT_ID?.trim() ||
+    env.NEXT_PUBLIC_AUTH0_CLIENT_ID?.trim() ||
+    undefined
+  );
+}
+
+export function getAuth0ClientSecret(
+  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
+): string | undefined {
+  return env.CM_AUTH0_CLIENT_SECRET?.trim() || env.AUTH0_CLIENT_SECRET?.trim() || undefined;
 }
 
 export function isAuth0Configured(
   env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
 ): boolean {
   return Boolean(
-    env.AUTH0_DOMAIN && getAuth0ClientId(env) && env.AUTH0_CLIENT_SECRET && env.AUTH0_SECRET,
+    env.AUTH0_DOMAIN &&
+      getAuth0ClientId(env) &&
+      getAuth0ClientSecret(env) &&
+      env.AUTH0_SECRET,
   );
 }
 
@@ -21,8 +35,7 @@ export function isAuthUiEnabled(
 ): boolean {
   if (isAuth0Configured(env)) return true;
   if (env.NEXT_PUBLIC_AUTH0_CONFIGURED === 'true') return true;
-  if (env.AUTH0_CLIENT_ID?.trim() && env.AUTH0_DOMAIN?.trim()) return true;
-  if (env.NEXT_PUBLIC_AUTH0_CLIENT_ID?.trim() && env.AUTH0_DOMAIN?.trim()) return true;
+  if (getAuth0ClientId(env) && env.AUTH0_DOMAIN?.trim()) return true;
   return false;
 }
 
