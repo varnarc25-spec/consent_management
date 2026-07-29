@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { ProtectedLayout } from '@/components/protected-layout';
 import { apiFetch, clearStoredTokens } from '@/lib/api';
-import { useRouter } from 'next/navigation';
 
 interface LoginRecord {
   id: string;
@@ -14,7 +13,6 @@ interface LoginRecord {
 }
 
 export default function SettingsPage() {
-  const router = useRouter();
   const [history, setHistory] = useState<LoginRecord[]>([]);
   const [message, setMessage] = useState('');
 
@@ -29,7 +27,7 @@ export default function SettingsPage() {
     if (result.ok) {
       setMessage('Logged out from all devices');
       clearStoredTokens();
-      router.push('/login');
+      window.location.assign('/auth/logout');
     }
   }
 

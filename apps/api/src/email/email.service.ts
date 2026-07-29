@@ -34,7 +34,7 @@ export class EmailService {
   }
 
   async sendVerificationEmail(email: string, token: string) {
-    const link = `${APP_URLS.admin}/verify-email?token=${token}`;
+    const link = `${APP_URLS.web}/verify-email?token=${token}`;
     await this.send(
       email,
       'Verify your CMP account',

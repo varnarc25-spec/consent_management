@@ -3,6 +3,17 @@ import { NextResponse } from 'next/server';
 import { isAuth0Configured, appBaseUrlMatchesHost } from '@cmp/auth';
 import { getAuth0 } from './lib/auth0';
 
+const PUBLIC = ['/auth'];
+const PROTECTED = ['/dashboard', '/settings', '/onboarding', '/verify-email'];
+
+function isPublicPath(pathname: string) {
+  return PUBLIC.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+function isProtectedPath(pathname: string) {
+  return PROTECTED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 export async function middleware(request: NextRequest) {
   try {
     const pathname = request.nextUrl.pathname;
@@ -46,6 +57,16 @@ export async function middleware(request: NextRequest) {
     }
 
     const authResponse = await getAuth0().middleware(request);
+
+    if (isProtectedPath(pathname) && !isPublicPath(pathname)) {
+      const session = await getAuth0().getSession(request);
+      if (!session?.user) {
+        const login = new URL('/auth/login', request.url);
+        const path = request.nextUrl.pathname + request.nextUrl.search;
+        login.searchParams.set('returnTo', path);
+        return NextResponse.redirect(login);
+      }
+    }
 
     return authResponse;
   } catch (err) {

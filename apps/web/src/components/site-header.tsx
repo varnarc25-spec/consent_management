@@ -1,7 +1,6 @@
 import { AuthNavLink } from '@/components/auth-nav-link';
 import { isAuthUiEnabled } from '@cmp/auth';
-
-const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_URL ?? 'http://localhost:3001';
+import { getAdminUrl } from '@/lib/admin-url';
 
 export function SiteHeader({
   signedIn,
@@ -23,7 +22,7 @@ export function SiteHeader({
                 <span style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>{userName}</span>
               ) : null}
               <AuthNavLink href="/auth/logout">Sign out</AuthNavLink>
-              <AuthNavLink className="btn" href={`${ADMIN_URL}/dashboard`} style={{ padding: '0.5rem 1rem' }}>
+              <AuthNavLink className="btn" href="/dashboard" style={{ padding: '0.5rem 1rem' }}>
                 Dashboard
               </AuthNavLink>
             </>
@@ -37,8 +36,8 @@ export function SiteHeader({
           )
         ) : (
           <>
-            <a href={`${ADMIN_URL}/auth/login`}>Sign in</a>
-            <a className="btn" href={`${ADMIN_URL}/auth/login?screen_hint=signup`} style={{ padding: '0.5rem 1rem' }}>
+            <a href={`${getAdminUrl()}/auth/login`}>Sign in</a>
+            <a className="btn" href={`${getAdminUrl()}/auth/login?screen_hint=signup`} style={{ padding: '0.5rem 1rem' }}>
               Get started
             </a>
           </>
@@ -47,5 +46,3 @@ export function SiteHeader({
     </header>
   );
 }
-
-export { ADMIN_URL };

@@ -5,8 +5,22 @@ import { getAuth0 } from './lib/auth0';
 
 const PUBLIC = ['/auth'];
 
+const USER_PORTAL_PATHS = ['/dashboard', '/settings', '/onboarding', '/verify-email'];
+
 function isPublicPath(pathname: string) {
   return PUBLIC.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+function isUserPortalPath(pathname: string) {
+  return USER_PORTAL_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+function getWebBaseUrl() {
+  return (
+    process.env.WEB_URL?.replace(/\/$/, '') ||
+    process.env.NEXT_PUBLIC_WEB_URL?.replace(/\/$/, '') ||
+    'http://localhost:3000'
+  );
 }
 
 function authNotConfiguredResponse() {
@@ -27,6 +41,11 @@ function authNotConfiguredResponse() {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (isUserPortalPath(pathname)) {
+    const target = new URL(`${pathname}${request.nextUrl.search}`, getWebBaseUrl());
+    return NextResponse.redirect(target);
+  }
 
   if (!isAuth0Configured()) {
     return NextResponse.next();

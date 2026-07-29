@@ -12,7 +12,7 @@ export function useRequirePermission(user: CurrentUser | null, permission: Permi
   useEffect(() => {
     if (!user) return;
     if (!hasPermission(user.permissions, permission)) {
-      router.replace('/dashboard');
+      router.replace('/domains');
     }
   }, [user, permission, router]);
 }

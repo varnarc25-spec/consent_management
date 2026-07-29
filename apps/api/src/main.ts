@@ -19,7 +19,10 @@ async function bootstrap() {
 
   app.use(helmet());
   app.enableCors({
-    origin: [process.env.ADMIN_URL ?? 'http://localhost:3001'],
+    origin: [
+      process.env.ADMIN_URL ?? 'http://localhost:3001',
+      process.env.WEB_URL ?? 'http://localhost:3000',
+    ],
     credentials: true,
   });
   app.setGlobalPrefix(API_CONFIG.prefix);

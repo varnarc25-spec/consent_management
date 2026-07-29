@@ -7,12 +7,10 @@ import type { CurrentUser } from '@cmp/types';
 import { clearStoredTokens } from '@/lib/api';
 
 const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Dashboard', permission: null },
   { href: '/domains', label: 'Domains', permission: PERMISSIONS.DOMAIN_MANAGE },
   { href: '/organization', label: 'Organization', permission: PERMISSIONS.ORGANIZATION_MANAGE },
   { href: '/users', label: 'Users', permission: PERMISSIONS.USER_MANAGE },
   { href: '/audit-logs', label: 'Audit Logs', permission: PERMISSIONS.AUDIT_VIEW },
-  { href: '/settings', label: 'Settings', permission: null },
 ];
 
 export function AdminShell({

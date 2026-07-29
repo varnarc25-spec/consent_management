@@ -178,6 +178,9 @@ importers:
       '@cmp/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@cmp/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       '@cmp/utils':
         specifier: workspace:*
         version: link:../../packages/utils

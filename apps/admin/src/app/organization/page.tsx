@@ -1,9 +1,9 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
 import { apiFetch } from '@/lib/api';
+import { getWebUrl } from '@/lib/web-url';
 
 interface Organization {
   id: string;
@@ -17,7 +17,6 @@ interface Organization {
 }
 
 export default function OrganizationPage() {
-  const router = useRouter();
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -27,15 +26,16 @@ export default function OrganizationPage() {
   const [permanentName, setPermanentName] = useState('');
 
   useEffect(() => {
+    const webUrl = getWebUrl();
     apiFetch<Organization | null>('/organizations/me').then((r) => {
       if (!r.data) {
-        router.replace('/onboarding');
+        window.location.assign(`${webUrl}/onboarding`);
       } else {
         setOrg(r.data);
       }
       setLoading(false);
     });
-  }, [router]);
+  }, []);
 
   async function onUpdate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -67,7 +67,7 @@ export default function OrganizationPage() {
     }
     const result = await apiFetch('/organizations/me', { method: 'DELETE' });
     if (result.ok) {
-      router.push('/onboarding');
+      window.location.assign(`${getWebUrl()}/onboarding`);
     } else {
       setError(result.error?.message ?? 'Delete failed');
     }
@@ -80,7 +80,7 @@ export default function OrganizationPage() {
       body: JSON.stringify({ confirmation: 'DELETE', organizationName: permanentName }),
     });
     if (result.ok) {
-      router.push('/onboarding');
+      window.location.assign(`${getWebUrl()}/onboarding`);
     } else {
       setError(result.error?.message ?? 'Permanent delete failed');
     }

@@ -49,7 +49,7 @@ function VerifyEmailContent() {
           </>
         )}
         <p style={{ marginTop: '1rem' }}>
-          <Link href="/login">Go to sign in</Link>
+          <Link href="/auth/login">Go to sign in</Link>
         </p>
       </div>
     </div>

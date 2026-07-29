@@ -6,7 +6,7 @@ config({ path: path.join(__dirname, '../../.env') });
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  transpilePackages: ['@cmp/auth', '@cmp/utils'],
+  transpilePackages: ['@cmp/auth', '@cmp/types', '@cmp/utils'],
   outputFileTracingRoot: path.join(__dirname, '../../'),
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,

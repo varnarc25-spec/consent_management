@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { CurrentUser } from '@cmp/types';
 import { apiFetch } from '@/lib/api';
-import { getWebUrl } from '@/lib/web-url';
-import { AdminShell } from '@/components/admin-shell';
+import { UserShell } from '@/components/user-shell';
 
 export function ProtectedLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -20,36 +21,37 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
       ]);
 
       if (!result.ok || !result.data) {
-        window.location.href = '/auth/login';
+        window.location.assign('/auth/login');
         return;
       }
 
-      const webUrl = getWebUrl();
       const verificationRequired = authConfig.data?.emailVerificationEnabled ?? true;
       if (verificationRequired && !result.data.emailVerified) {
-        window.location.assign(`${webUrl}/verify-email`);
-        return;
-      }
-
-      if (!result.data.organizationId) {
-        window.location.assign(`${webUrl}/onboarding`);
-        return;
-      }
-
-      const onboarding = await apiFetch<{ complete: boolean; step: number }>(
-        '/organizations/me/onboarding',
-      );
-      if (onboarding.data && !onboarding.data.complete && onboarding.data.step < 10) {
-        window.location.assign(`${webUrl}/onboarding`);
+        router.replace('/verify-email');
         return;
       }
 
       setUser(result.data);
       setLoading(false);
+
+      const path = window.location.pathname;
+      if (!result.data.organizationId && !path.startsWith('/onboarding')) {
+        router.replace('/onboarding');
+        return;
+      }
+
+      if (result.data.organizationId && !path.startsWith('/onboarding')) {
+        const onboarding = await apiFetch<{ complete: boolean; step: number }>(
+          '/organizations/me/onboarding',
+        );
+        if (onboarding.data && !onboarding.data.complete && onboarding.data.step < 10) {
+          router.replace('/onboarding');
+        }
+      }
     }
 
     load();
-  }, []);
+  }, [router]);
 
   if (loading || !user) {
     return (
@@ -59,5 +61,5 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <AdminShell user={user}>{children}</AdminShell>;
+  return <UserShell user={user}>{children}</UserShell>;
 }

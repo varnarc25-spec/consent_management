@@ -3,7 +3,9 @@
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import type { CurrentUser } from '@cmp/types';
 import { apiFetch } from '@/lib/api';
+import { getAdminUrl } from '@/lib/admin-url';
 
 const STEPS = [
   'Welcome',
@@ -31,6 +33,7 @@ interface ValidationResult {
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const adminUrl = getAdminUrl();
   const [step, setStep] = useState(1);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -53,12 +56,20 @@ export default function OnboardingPage() {
   });
 
   useEffect(() => {
-    apiFetch<{
+    async function init() {
+      await fetch('/api/auth/sync', { method: 'POST', credentials: 'include' });
+      const me = await apiFetch<CurrentUser>('/auth/me');
+      if (!me.ok) {
+        window.location.assign('/auth/login');
+        return;
+      }
+
+      const r = await apiFetch<{
       step: number;
       complete: boolean;
       hasOrganization: boolean;
       organization?: Partial<typeof orgData>;
-    }>('/organizations/me/onboarding').then((r) => {
+      }>('/organizations/me/onboarding');
       if (r.data?.complete) {
         router.replace('/dashboard');
       } else {
@@ -67,7 +78,8 @@ export default function OnboardingPage() {
           setOrgData((prev) => ({ ...prev, ...r.data!.organization }));
         }
       }
-    });
+    }
+    init();
   }, [router]);
 
   async function saveStep(nextStep: number, profile?: Partial<typeof orgData>, complete = false) {
@@ -358,9 +370,9 @@ export default function OnboardingPage() {
             <p style={{ color: 'var(--muted)' }}>
               You can configure categories, publish a policy version, and set banner text before going live.
             </p>
-            <Link className="btn btn-secondary" href={`/domains/${domain.id}/consent`} style={{ display: 'inline-block', marginTop: '1rem' }}>
+            <a className="btn btn-secondary" href={`${adminUrl}/domains/${domain.id}/consent`} style={{ display: 'inline-block', marginTop: '1rem' }}>
               Open consent configuration
-            </Link>
+            </a>
             <button className="btn" type="button" style={{ marginLeft: '1rem' }} onClick={() => saveStep(9)}>
               Continue
             </button>

@@ -5,9 +5,11 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { CurrentUser } from '@cmp/types';
 import { apiFetch } from '@/lib/api';
+import { getAdminUrl } from '@/lib/admin-url';
 
 export default function DashboardPage() {
   const [user, setUser] = useState<CurrentUser | null>(null);
+  const adminUrl = getAdminUrl();
 
   useEffect(() => {
     apiFetch<CurrentUser>('/auth/me').then((r) => {
@@ -28,18 +30,22 @@ export default function DashboardPage() {
               ? 'Your organization is set up.'
               : 'Create your organization to get started.'}
           </p>
-          <Link className="btn" href="/organization" style={{ marginTop: '1rem' }}>
+          <Link
+            className="btn"
+            href={user?.organizationId ? `${adminUrl}/organization` : '/onboarding'}
+            style={{ marginTop: '1rem' }}
+          >
             {user?.organizationId ? 'Manage organization' : 'Create organization'}
           </Link>
         </div>
         <div className="card">
-          <h3>Sprint 1 complete</h3>
-          <ul style={{ color: 'var(--muted)', fontSize: '0.875rem', paddingLeft: '1.25rem' }}>
-            <li>Multi-tenant organizations</li>
-            <li>Email/password authentication</li>
-            <li>RBAC with 8 roles</li>
-            <li>Audit logging</li>
-          </ul>
+          <h3>Consent management</h3>
+          <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
+            Configure domains, banners, and consent policies in the admin console.
+          </p>
+          <a className="btn btn-secondary" href={`${adminUrl}/domains`} style={{ marginTop: '1rem' }}>
+            Open admin console
+          </a>
         </div>
       </div>
     </ProtectedLayout>
