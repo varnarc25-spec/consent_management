@@ -1,5 +1,6 @@
 import { CmpSdk } from './cmp-sdk';
 import { clearConsent } from './consent-store';
+import { mountTestScripts } from './test-scripts';
 
 declare global {
   interface Window {
@@ -93,6 +94,8 @@ export function initFromScript() {
     if (!window.__CMP__) return;
     window.__CMP__.consent = consent;
   });
+
+  mountTestScripts(script, domainKey, sdk);
 
   const jsErrors: string[] = [];
   window.addEventListener('error', (event) => {

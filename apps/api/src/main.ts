@@ -45,7 +45,11 @@ async function bootstrap() {
         return;
       }
       // CMP SDK runs on customer websites — allow HTTPS (and localhost for dev).
-      if (origin.startsWith('https://') || origin.startsWith('http://localhost')) {
+      if (
+        origin.startsWith('https://') ||
+        origin.startsWith('http://localhost') ||
+        origin.startsWith('http://127.0.0.1')
+      ) {
         callback(null, true);
         return;
       }
