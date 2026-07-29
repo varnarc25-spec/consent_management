@@ -105,9 +105,17 @@ button, input, select, textarea { font: inherit; }
 
 .site-header nav { display: flex; gap: 1.5rem; align-items: center; }
 
-.site-header a { color: var(--muted); text-decoration: none; }
+.site-header nav a:not(.btn) { color: var(--muted); text-decoration: none; }
 
-.site-header a:hover { color: var(--text); }
+.site-header nav a:not(.btn):hover { color: var(--text); }
+
+.site-header a.btn {
+  color: white;
+}
+
+.site-header a.btn:hover {
+  color: white;
+}
 
 h1,
 h2,
