@@ -252,6 +252,7 @@ export class PublicCmpController {
   @Public()
   @Get('sdk.js')
   @Header('Content-Type', 'application/javascript')
+  @Header('Cross-Origin-Resource-Policy', 'cross-origin')
   sdkScript(@Res() res: Response) {
     res.send(loadSdkBundle());
   }
