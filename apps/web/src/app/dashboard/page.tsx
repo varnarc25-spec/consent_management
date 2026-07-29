@@ -5,11 +5,9 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { CurrentUser } from '@cmp/types';
 import { apiFetch } from '@/lib/api';
-import { getAdminUrl } from '@/lib/admin-url';
 
 export default function DashboardPage() {
   const [user, setUser] = useState<CurrentUser | null>(null);
-  const adminUrl = getAdminUrl();
 
   useEffect(() => {
     apiFetch<CurrentUser>('/auth/me').then((r) => {
@@ -32,20 +30,20 @@ export default function DashboardPage() {
           </p>
           <Link
             className="btn"
-            href={user?.organizationId ? `${adminUrl}/organization` : '/onboarding'}
+            href={user?.organizationId ? '/settings' : '/onboarding'}
             style={{ marginTop: '1rem' }}
           >
-            {user?.organizationId ? 'Manage organization' : 'Create organization'}
+            {user?.organizationId ? 'Account settings' : 'Create organization'}
           </Link>
         </div>
         <div className="card">
-          <h3>Consent management</h3>
+          <h3>Getting started</h3>
           <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
-            Configure domains, banners, and consent policies in the admin console.
+            Complete onboarding to add domains, configure consent banners, and publish your CMP.
           </p>
-          <a className="btn btn-secondary" href={`${adminUrl}/domains`} style={{ marginTop: '1rem' }}>
-            Open admin console
-          </a>
+          <Link className="btn btn-secondary" href="/onboarding" style={{ marginTop: '1rem' }}>
+            Continue setup
+          </Link>
         </div>
       </div>
     </ProtectedLayout>

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getRuntimePublicEnvScript } from '@/lib/runtime-public-env';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -7,8 +8,15 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const envScript = getRuntimePublicEnvScript();
+
   return (
     <html lang="en">
+      <head>
+        {envScript ? (
+          <script dangerouslySetInnerHTML={{ __html: envScript }} />
+        ) : null}
+      </head>
       <body>{children}</body>
     </html>
   );

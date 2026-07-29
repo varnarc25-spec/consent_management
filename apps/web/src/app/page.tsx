@@ -1,5 +1,4 @@
 import { Suspense } from 'react';
-import { getAdminUrl } from '@/lib/admin-url';
 import { AuthenticatedSiteHeader } from '@/components/authenticated-site-header';
 import { AuthNavLink } from '@/components/auth-nav-link';
 import { LoginErrorBanner } from '@/components/login-error-banner';
@@ -27,9 +26,9 @@ export default function HomePage() {
             <AuthNavLink className="btn" href="/auth/login?screen_hint=signup">
               Start free trial
             </AuthNavLink>
-            <a className="btn btn-secondary" href={`${getAdminUrl()}/domains`}>
-              Admin console
-            </a>
+            <AuthNavLink className="btn btn-secondary" href="/dashboard">
+              Go to dashboard
+            </AuthNavLink>
           </div>
         </section>
 

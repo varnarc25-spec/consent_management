@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { CurrentUser } from '@cmp/types';
 import { clearStoredTokens } from '@/lib/api';
-import { getAdminUrl } from '@/lib/admin-url';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -19,7 +18,6 @@ export function UserShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const adminUrl = getAdminUrl();
 
   function handleLogout() {
     clearStoredTokens();
@@ -46,9 +44,6 @@ export function UserShell({
               {item.label}
             </Link>
           ))}
-          <a href={`${adminUrl}/domains`} style={{ color: 'var(--muted)', textDecoration: 'none' }}>
-            Admin console
-          </a>
           <span style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
             {user.firstName} {user.lastName}
           </span>
