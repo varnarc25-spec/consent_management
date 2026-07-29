@@ -1,10 +1,8 @@
 import { getAuth0 } from '@/lib/auth0';
 import { getApiBaseUrl } from '@/lib/runtime-public-env';
+import { ACCESS_COOKIE, REFRESH_COOKIE } from '@/lib/auth-cookies';
 import { NextResponse } from 'next/server';
 import type { SessionData } from '@auth0/nextjs-auth0/types';
-
-const ACCESS_COOKIE = 'cmp_access_token';
-const REFRESH_COOKIE = 'cmp_refresh_token';
 
 function setCmpTokenCookies(
   response: NextResponse,
@@ -66,5 +64,3 @@ export async function POST() {
   }
   return response;
 }
-
-export { ACCESS_COOKIE, REFRESH_COOKIE };
