@@ -209,6 +209,7 @@ export default function DomainConsentPage() {
   const [renewals, setRenewals] = useState<Renewal[]>([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [publishing, setPublishing] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [banner, setBanner] = useState<BannerState>(defaultBanner());
   const [previewViewport, setPreviewViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
@@ -326,14 +327,30 @@ export default function DomainConsentPage() {
   }
 
   async function publishDraft() {
-    await saveBanner();
-    if (!draft) return;
+    setPublishing(true);
+    setError('');
+    setMessage('');
+    if (!draft) {
+      setError('No draft policy found. Refresh the page and try again.');
+      setPublishing(false);
+      return;
+    }
+    const saveResult = await apiFetch<Policy>(`/domains/${domainId}/consent/policies/${draft.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ bannerContent: serializeBanner(banner) }),
+    });
+    if (!saveResult.ok) {
+      setError(saveResult.error?.message ?? 'Failed to save banner before publish');
+      setPublishing(false);
+      return;
+    }
     const result = await apiFetch<Policy>(`/domains/${domainId}/consent/policies/${draft.id}/publish`, {
       method: 'POST',
       body: JSON.stringify({ changeSummary: 'Published banner configuration' }),
     });
+    setPublishing(false);
     if (result.ok) {
-      setMessage(`Policy v${result.data?.versionNumber} published`);
+      setMessage(`Published successfully — policy v${result.data?.versionNumber} is now live on your website.`);
       loadPolicies();
     } else {
       setError(result.error?.message ?? 'Failed to publish policy');
@@ -697,11 +714,22 @@ export default function DomainConsentPage() {
               <label htmlFor="footerSelector">Footer link selector</label>
               <input id="footerSelector" value={banner.privacyTrigger.footerSelector} onChange={(e) => setBanner({ ...banner, privacyTrigger: { ...banner.privacyTrigger, footerSelector: e.target.value } })} placeholder="footer .legal-links" />
             </div>
-            <button className="btn" type="submit">Save draft</button>
-            <button className="btn" type="button" style={{ marginLeft: '0.5rem' }} onClick={publishDraft}>Publish</button>
+            <button className="btn" type="submit" disabled={publishing}>Save draft</button>
+            <button className="btn" type="button" style={{ marginLeft: '0.5rem' }} onClick={publishDraft} disabled={publishing}>
+              {publishing ? 'Publishing…' : 'Publish'}
+            </button>
             <Link className="btn btn-secondary" href={`/websites/${domainId}/test-banner`} style={{ marginLeft: '0.5rem' }}>
               Test live banner
             </Link>
+            {(message || error) && (
+              <p
+                className={error ? 'error' : 'success'}
+                style={{ marginTop: '1rem', fontWeight: 500 }}
+                role="status"
+              >
+                {error || message}
+              </p>
+            )}
           </form>
 
           <div className="card">

@@ -30,15 +30,31 @@ function getApiBase(script: HTMLScriptElement | null) {
 }
 
 function sendHeartbeat(apiBase: string, payload: Record<string, unknown>) {
-  fetch(`${apiBase}/heartbeat`, {
+  return fetch(`${apiBase}/heartbeat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   }).catch(() => undefined);
 }
 
+/** Next.js and other loaders inject sdk.js without a reliable document.currentScript. */
+export function findCmpScript(): HTMLScriptElement | null {
+  const current = document.currentScript as HTMLScriptElement | null;
+  if (current?.getAttribute('data-domain-key')) return current;
+
+  const byId = document.getElementById('cmp-sdk');
+  if (byId?.getAttribute('data-domain-key')) return byId as HTMLScriptElement;
+
+  const matches = Array.from(
+    document.querySelectorAll<HTMLScriptElement>('script[data-domain-key]'),
+  ).filter((node) => /\/sdk\.js(?:\?.*)?$/.test(node.src));
+
+  if (matches.length === 1) return matches[0]!;
+  return matches[0] ?? null;
+}
+
 export function initFromScript() {
-  const script = document.currentScript as HTMLScriptElement | null;
+  const script = findCmpScript();
   const domainKey = script?.getAttribute('data-domain-key');
   const env = script?.getAttribute('data-env') ?? 'production';
   const debug = script?.getAttribute('data-debug') === 'true';
@@ -83,21 +99,23 @@ export function initFromScript() {
     if (event.message) jsErrors.push(event.message);
   });
 
-  sendHeartbeat(apiBase, {
-    domainKey,
-    hostname: location.hostname,
-    scriptLoaded: true,
-    consentEventDetected: false,
-    autoBlockingEnabled: true,
-    googleConsentModeDetected:
-      typeof window.gtag === 'function' || typeof window.dataLayer !== 'undefined',
-    duplicateScripts: document.querySelectorAll(`script[data-domain-key="${domainKey}"]`).length,
-    jsErrors: jsErrors.slice(0, 5),
-    scriptLoadedFirst: true,
-    defaultConsentApplied: true,
-  });
+  void (async () => {
+    await sendHeartbeat(apiBase, {
+      domainKey,
+      hostname: location.hostname,
+      scriptLoaded: true,
+      consentEventDetected: false,
+      autoBlockingEnabled: true,
+      googleConsentModeDetected:
+        typeof window.gtag === 'function' || typeof window.dataLayer !== 'undefined',
+      duplicateScripts: document.querySelectorAll(`script[data-domain-key="${domainKey}"]`).length,
+      jsErrors: jsErrors.slice(0, 5),
+      scriptLoadedFirst: true,
+      defaultConsentApplied: true,
+    });
 
-  void sdk.init();
+    await sdk.init();
+  })();
 
   return {
     sdk,

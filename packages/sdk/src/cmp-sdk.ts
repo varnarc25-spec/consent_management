@@ -36,14 +36,22 @@ export class CmpSdk {
   ) {}
 
   async init() {
-    const response = await fetch(`${this.apiBase}/config/${encodeURIComponent(this.domainKey)}`);
-    const result = await response.json();
+    const result = await this.fetchConfig();
     if (!result.ok || !result.data) {
       if (this.debug) console.warn('[CMP] Config unavailable', result);
       return;
     }
 
-    this.config = result.data as CmpConfig;
+    this.applyConfig(result.data as CmpConfig);
+  }
+
+  private async fetchConfig() {
+    const response = await fetch(`${this.apiBase}/config/${encodeURIComponent(this.domainKey)}`);
+    return response.json() as Promise<{ ok?: boolean; data?: CmpConfig; error?: { code?: string } }>;
+  }
+
+  private applyConfig(config: CmpConfig) {
+    this.config = config;
     this.visitor = getOrCreateVisitorId(this.domainKey);
     this.ready = true;
     this.restoreStoredConsent();
