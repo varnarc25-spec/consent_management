@@ -253,3 +253,7 @@ pre {
   border-radius: 8px;
   color: var(--text);
 }
+
+.required {
+  color: var(--danger);
+}

@@ -26,16 +26,27 @@ export default function OrganizationPage() {
   const [permanentName, setPermanentName] = useState('');
 
   useEffect(() => {
-    const webUrl = getWebUrl();
     apiFetch<Organization | null>('/organizations/me').then((r) => {
-      if (!r.data) {
-        window.location.assign(`${webUrl}/onboarding`);
-      } else {
-        setOrg(r.data);
-      }
+      if (r.data) setOrg(r.data);
       setLoading(false);
     });
   }, []);
+
+  async function onCreate(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const result = await apiFetch<Organization>('/organizations', {
+      method: 'POST',
+      body: JSON.stringify({ name: form.get('name') }),
+    });
+    if (result.ok && result.data) {
+      setOrg(result.data);
+      setMessage('Organization created');
+      setError('');
+    } else {
+      setError(result.error?.message ?? 'Failed to create organization');
+    }
+  }
 
   async function onUpdate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -67,7 +78,7 @@ export default function OrganizationPage() {
     }
     const result = await apiFetch('/organizations/me', { method: 'DELETE' });
     if (result.ok) {
-      window.location.assign(`${getWebUrl()}/onboarding`);
+      window.location.assign(`${getWebUrl()}/dashboard`);
     } else {
       setError(result.error?.message ?? 'Delete failed');
     }
@@ -80,16 +91,37 @@ export default function OrganizationPage() {
       body: JSON.stringify({ confirmation: 'DELETE', organizationName: permanentName }),
     });
     if (result.ok) {
-      window.location.assign(`${getWebUrl()}/onboarding`);
+      window.location.assign(`${getWebUrl()}/dashboard`);
     } else {
       setError(result.error?.message ?? 'Permanent delete failed');
     }
   }
 
-  if (loading || !org) {
+  if (loading) {
     return (
       <ProtectedLayout>
         <p role="status">Loading organization...</p>
+      </ProtectedLayout>
+    );
+  }
+
+  if (!org) {
+    return (
+      <ProtectedLayout>
+        <h1>Organization</h1>
+        <p style={{ color: 'var(--muted)' }}>
+          Create an organization to manage domains and team settings. Optional profile fields can be
+          added later from the web portal dashboard.
+        </p>
+        <form className="card" style={{ marginTop: '1.5rem', maxWidth: 520 }} onSubmit={onCreate}>
+          <h3>Create organization</h3>
+          <div className="field">
+            <label htmlFor="name">Organization name *</label>
+            <input id="name" name="name" required minLength={2} placeholder="Your company or team" />
+          </div>
+          {error && <p className="error">{error}</p>}
+          <button className="btn" type="submit">Create organization</button>
+        </form>
       </ProtectedLayout>
     );
   }

@@ -31,19 +31,6 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (!result.data.organizationId) {
-        window.location.assign(`${webUrl}/onboarding`);
-        return;
-      }
-
-      const onboarding = await apiFetch<{ complete: boolean; step: number }>(
-        '/organizations/me/onboarding',
-      );
-      if (onboarding.data && !onboarding.data.complete && onboarding.data.step < 10) {
-        window.location.assign(`${webUrl}/onboarding`);
-        return;
-      }
-
       setUser(result.data);
       setLoading(false);
     }

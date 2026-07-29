@@ -42,10 +42,6 @@ export default function DomainsPage() {
       body: JSON.stringify({
         hostname: form.get('hostname'),
         domainType: form.get('domainType'),
-        isProduction: form.get('isProduction') === 'true',
-        environment: form.get('environment'),
-        groupName: form.get('groupName') || undefined,
-        scanLimit: Number(form.get('scanLimit') || 10),
       }),
     });
     if (result.ok) {
@@ -69,39 +65,20 @@ export default function DomainsPage() {
       {showForm && (
         <form className="card" style={{ marginTop: '1rem', maxWidth: 520 }} onSubmit={onCreate}>
           <h3>Add website domain</h3>
+          <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginTop: 0 }}>
+            Fields marked <strong>*</strong> are required. All other settings use sensible defaults.
+          </p>
           <div className="field">
-            <label htmlFor="hostname">Hostname</label>
+            <label htmlFor="hostname">Hostname <span className="required">*</span></label>
             <input id="hostname" name="hostname" placeholder="example.com" required />
           </div>
           <div className="field">
-            <label htmlFor="domainType">Type</label>
-            <select id="domainType" name="domainType" defaultValue="ROOT">
+            <label htmlFor="domainType">Domain type <span className="required">*</span></label>
+            <select id="domainType" name="domainType" defaultValue="ROOT" required>
               <option value="ROOT">Root domain</option>
               <option value="SUBDOMAIN">Subdomain</option>
               <option value="STAGING">Staging</option>
               <option value="ALIAS">Alias</option>
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="groupName">Domain group</label>
-            <input id="groupName" name="groupName" placeholder="Optional group name" />
-          </div>
-          <div className="field">
-            <label htmlFor="scanLimit">Scan limit</label>
-            <input id="scanLimit" name="scanLimit" type="number" min={1} max={1000} defaultValue={10} />
-          </div>
-          <div className="field">
-            <label htmlFor="environment">Environment</label>
-            <select id="environment" name="environment" defaultValue="production">
-              <option value="production">Production</option>
-              <option value="staging">Staging</option>
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="isProduction">Production domain</label>
-            <select id="isProduction" name="isProduction" defaultValue="true">
-              <option value="true">Yes</option>
-              <option value="false">No</option>
             </select>
           </div>
           {error && <p className="error">{error}</p>}

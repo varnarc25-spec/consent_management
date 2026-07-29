@@ -33,21 +33,6 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
 
       setUser(result.data);
       setLoading(false);
-
-      const path = window.location.pathname;
-      if (!result.data.organizationId && !path.startsWith('/onboarding')) {
-        router.replace('/onboarding');
-        return;
-      }
-
-      if (result.data.organizationId && !path.startsWith('/onboarding')) {
-        const onboarding = await apiFetch<{ complete: boolean; step: number }>(
-          '/organizations/me/onboarding',
-        );
-        if (onboarding.data && !onboarding.data.complete && onboarding.data.step < 10) {
-          router.replace('/onboarding');
-        }
-      }
     }
 
     load();
