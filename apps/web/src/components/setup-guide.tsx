@@ -37,7 +37,7 @@ const SETUP_ITEMS = [
     id: 'banner',
     title: 'Consent banner',
     note: 'Configure categories and banner text.',
-    action: { label: 'Admin console', href: null as string | null },
+    action: null,
   },
   {
     id: 'install',
@@ -48,7 +48,7 @@ const SETUP_ITEMS = [
   {
     id: 'validate',
     title: 'Validate install',
-    note: 'Run checks from domain detail page.',
+    note: 'Run checks from the website detail page.',
     action: null,
   },
 ];
@@ -56,12 +56,12 @@ const SETUP_ITEMS = [
 export function SetupGuide({
   hasOrganization,
   hasDomains,
-  adminUrl,
+  firstDomainId,
   onAddDomain,
 }: {
   hasOrganization: boolean;
   hasDomains: boolean;
-  adminUrl: string;
+  firstDomainId?: string;
   onAddDomain: () => void;
 }) {
   return (
@@ -93,9 +93,9 @@ export function SetupGuide({
                   Add website
                 </button>
               )}
-              {item.id === 'banner' && hasDomains && (
-                <Link className="btn-link" href={`${adminUrl}/domains`}>
-                  Open admin console
+              {item.id === 'banner' && hasDomains && firstDomainId && (
+                <Link className="btn-link" href={`/websites/${firstDomainId}/consent`}>
+                  Configure consent
                 </Link>
               )}
               {item.action && item.id !== 'banner' && item.id !== 'domain' && (

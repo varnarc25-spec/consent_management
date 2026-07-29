@@ -4,7 +4,7 @@ import { isAuth0Configured, appBaseUrlMatchesHost } from '@cmp/auth';
 import { getAuth0 } from './lib/auth0';
 
 const PUBLIC = ['/auth'];
-const PROTECTED = ['/dashboard', '/settings', '/onboarding', '/verify-email'];
+const PROTECTED = ['/dashboard', '/settings', '/onboarding', '/verify-email', '/websites'];
 
 function isPublicPath(pathname: string) {
   return PUBLIC.some((p) => pathname === p || pathname.startsWith(`${p}/`));

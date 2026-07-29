@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { CurrentUser } from '@cmp/types';
 import { clearStoredTokens } from '@/lib/api';
-import { getAdminUrl } from '@/lib/admin-url';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -19,11 +18,17 @@ export function UserShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const adminUrl = getAdminUrl();
 
   function handleLogout() {
     clearStoredTokens();
     window.location.assign('/auth/logout');
+  }
+
+  function isNavActive(href: string) {
+    if (href === '/dashboard') {
+      return pathname === '/dashboard' || pathname.startsWith('/websites');
+    }
+    return pathname === href || pathname.startsWith(`${href}/`);
   }
 
   return (
@@ -35,17 +40,14 @@ export function UserShell({
             <Link
               key={item.href}
               href={item.href}
-              aria-current={pathname === item.href ? 'page' : undefined}
-              className={pathname === item.href ? 'active' : undefined}
+              aria-current={isNavActive(item.href) ? 'page' : undefined}
+              className={isNavActive(item.href) ? 'active' : undefined}
             >
               {item.label}
             </Link>
           ))}
         </nav>
         <div className="nav-actions">
-          <a className="nav-external" href={adminUrl} target="_blank" rel="noreferrer">
-            Admin console
-          </a>
           <span className="nav-user">
             {user.firstName} {user.lastName}
           </span>

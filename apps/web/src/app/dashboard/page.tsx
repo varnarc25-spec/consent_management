@@ -1,13 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { ProtectedLayout } from '@/components/protected-layout';
 import { AddDomainForm } from '@/components/add-domain-form';
 import { SetupGuide } from '@/components/setup-guide';
 import { useEffect, useState } from 'react';
 import type { CurrentUser } from '@cmp/types';
 import { apiFetch } from '@/lib/api';
-import Link from 'next/link';
-import { getAdminUrl } from '@/lib/admin-url';
 
 interface Domain {
   id: string;
@@ -18,7 +17,6 @@ interface Domain {
 }
 
 export default function DashboardPage() {
-  const adminUrl = getAdminUrl();
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [domains, setDomains] = useState<Domain[]>([]);
   const [showDomainForm, setShowDomainForm] = useState(false);
@@ -123,7 +121,7 @@ export default function DashboardPage() {
                       </td>
                       <td>{domain.enabled ? 'Enabled' : 'Disabled'}</td>
                       <td>
-                        <Link href={`${adminUrl}/domains/${domain.id}`}>Manage</Link>
+                        <Link href={`/websites/${domain.id}`}>Manage</Link>
                       </td>
                     </tr>
                   ))}
@@ -137,7 +135,7 @@ export default function DashboardPage() {
           <SetupGuide
             hasOrganization={Boolean(user?.organizationId)}
             hasDomains={domains.length > 0}
-            adminUrl={adminUrl}
+            firstDomainId={domains[0]?.id}
             onAddDomain={() => setShowDomainForm(true)}
           />
         </aside>
