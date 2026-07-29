@@ -4,6 +4,8 @@ import { AuthenticatedSiteHeader } from '@/components/authenticated-site-header'
 import { AuthNavLink } from '@/components/auth-nav-link';
 import { LoginErrorBanner } from '@/components/login-error-banner';
 
+export const dynamic = 'force-dynamic';
+
 export default function HomePage() {
   return (
     <>
