@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { getAuth0 } from '@/lib/auth0';
-import { ACCESS_COOKIE } from '@/app/api/auth/sync/route';
+import { ACCESS_COOKIE } from '@/lib/auth-cookies';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
