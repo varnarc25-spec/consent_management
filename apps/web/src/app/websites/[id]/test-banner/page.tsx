@@ -19,7 +19,7 @@ export default function TestBannerPage() {
   const [scriptLoaded, setScriptLoaded] = useState(false);
 
   useEffect(() => {
-    apiFetch<Domain>(`/websites/${domainId}`).then((r) => {
+    apiFetch<Domain>(`/domains/${domainId}`).then((r) => {
       if (r.data) setDomain(r.data);
     });
   }, [domainId]);

@@ -59,42 +59,54 @@ export default function DomainDetailPage() {
     debugMode: false,
   });
 
-  function loadDomain() {
-    apiFetch<Domain>(`/websites/${id}`).then((r) => {
-      if (r.data) {
-        setDomain(r.data);
-        setSettings({
-          enabled: r.data.enabled,
-          groupName: r.data.groupName ?? '',
-          scanLimit: r.data.scanLimit,
-          autoBlocking: r.data.autoBlocking,
-          debugMode: r.data.debugMode,
-        });
-      }
-    });
+  const [loading, setLoading] = useState(true);
+
+  async function loadDomain() {
+    const r = await apiFetch<Domain>(`/domains/${id}`);
+    if (r.data) {
+      setDomain(r.data);
+      setSettings({
+        enabled: r.data.enabled,
+        groupName: r.data.groupName ?? '',
+        scanLimit: r.data.scanLimit,
+        autoBlocking: r.data.autoBlocking,
+        debugMode: r.data.debugMode,
+      });
+      setError('');
+    } else if (!domain) {
+      setError(r.error?.message ?? 'Website not found');
+    }
+    return r;
   }
 
   function loadHistory() {
-    apiFetch<HistoryItem[]>(`/websites/${id}/validation-history`).then((r) => {
+    apiFetch<HistoryItem[]>(`/domains/${id}/validation-history`).then((r) => {
       if (r.data) setHistory(r.data);
     });
   }
 
   useEffect(() => {
-    loadDomain();
-    loadHistory();
-    apiFetch<Record<string, unknown>>(`/websites/${id}/verification-instructions`).then((r) => {
-      if (r.data) setInstructions(r.data);
-    });
-    apiFetch<InstallData>(`/websites/${id}/installation-script`).then((r) => {
-      if (r.data) setInstall(r.data);
-    });
+    async function init() {
+      setLoading(true);
+      setError('');
+      await fetch('/api/auth/sync', { method: 'POST', credentials: 'include' });
+      await loadDomain();
+      loadHistory();
+      apiFetch<Record<string, unknown>>(`/domains/${id}/verification-instructions`).then((r) => {
+        if (r.data) setInstructions(r.data);
+      });
+      apiFetch<InstallData>(`/domains/${id}/installation-script`).then((r) => {
+        if (r.data) setInstall(r.data);
+      });
+      setLoading(false);
+    }
+    init();
   }, [id]);
 
   async function verify(method: string) {
     setMessage('');
     setError('');
-    const result = await apiFetch<{ verified: boolean; message: string }>(`/websites/${id}/verify`, {
+    const result = await apiFetch<{ verified: boolean; message: string }>(`/domains/${id}/verify`, {
       method: 'POST',
       body: JSON.stringify({ method }),
     });
@@ -107,7 +119,7 @@ export default function DomainDetailPage() {
   }
 
   async function runValidation() {
-    const result = await apiFetch<ValidationResult>(`/websites/${id}/validate-installation`, {
+    const result = await apiFetch<ValidationResult>(`/domains/${id}/validate-installation`, {
       method: 'POST',
     });
     if (result.data) {
@@ -120,7 +132,7 @@ export default function DomainDetailPage() {
     e.preventDefault();
     setMessage('');
     setError('');
-    const result = await apiFetch<Domain>(`/websites/${id}`, {
+    const result = await apiFetch<Domain>(`/domains/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({
         enabled: settings.enabled,
@@ -145,16 +157,19 @@ export default function DomainDetailPage() {
     }
   }
 
-  if (!domain) {
-    return (
-      <ProtectedLayout>
-        <p>Loading domain...</p>
-      </ProtectedLayout>
-    );
-  }
-
   return (
     <ProtectedLayout>
+      {loading ? (
+        <p role="status">Loading website…</p>
+      ) : !domain ? (
+        <div className="card">
+          <p className="error">{error || 'Website not found.'}</p>
+          <Link href="/dashboard" className="btn btn-secondary" style={{ marginTop: '1rem' }}>
+            Back to dashboard
+          </Link>
+        </div>
+      ) : (
+        <>
       <p><Link href="/dashboard">← Back to dashboard</Link> · <Link href={`/websites/${id}/consent`}>Consent configuration</Link> · <Link href={`/websites/${id}/test-banner`}>Test banner</Link></p>
       <h1>{domain.hostname}</h1>
       <p style={{ color: 'var(--muted)' }}>
@@ -325,6 +340,8 @@ export default function DomainDetailPage() {
             </tbody>
           </table>
         </div>
+      )}
+        </>
       )}
     </ProtectedLayout>
   );

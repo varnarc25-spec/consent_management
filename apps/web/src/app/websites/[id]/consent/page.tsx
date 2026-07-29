@@ -239,16 +239,16 @@ export default function DomainConsentPage() {
   );
 
   function loadCategories() {
-    apiFetch<Category[]>(`/websites/${domainId}/consent/categories`).then((r) => {
+    apiFetch<Category[]>(`/domains/${domainId}/consent/categories`).then((r) => {
       if (r.data) setCategories(r.data);
     });
   }
 
   function loadPolicies() {
-    apiFetch<Policy[]>(`/websites/${domainId}/consent/policies`).then((r) => {
+    apiFetch<Policy[]>(`/domains/${domainId}/consent/policies`).then((r) => {
       if (r.data) setPolicies(r.data);
     });
-    apiFetch<Policy>(`/websites/${domainId}/consent/policies/draft`).then((r) => {
+    apiFetch<Policy>(`/domains/${domainId}/consent/policies/draft`).then((r) => {
       if (r.data) {
         setDraft(r.data);
         setBanner(mergeBanner(r.data.bannerContent as Partial<BannerState>));
@@ -257,7 +257,7 @@ export default function DomainConsentPage() {
   }
 
   function loadRenewals() {
-    apiFetch<Renewal[]>(`/websites/${domainId}/consent/renewals`).then((r) => {
+    apiFetch<Renewal[]>(`/domains/${domainId}/consent/renewals`).then((r) => {
       if (r.data) setRenewals(r.data);
     });
   }
@@ -271,7 +271,7 @@ export default function DomainConsentPage() {
   async function addCategory(e: FormEvent) {
     e.preventDefault();
     setError('');
-    const result = await apiFetch<Category>(`/websites/${domainId}/consent/categories`, {
+    const result = await apiFetch<Category>(`/domains/${domainId}/consent/categories`, {
       method: 'POST',
       body: JSON.stringify({ name: newCategoryName }),
     });
@@ -285,7 +285,7 @@ export default function DomainConsentPage() {
   }
 
   async function updateCategory(category: Category, patch: Partial<Category>) {
-    const result = await apiFetch<Category>(`/websites/${domainId}/consent/categories/${category.id}`, {
+    const result = await apiFetch<Category>(`/domains/${domainId}/consent/categories/${category.id}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),
     });
@@ -303,7 +303,7 @@ export default function DomainConsentPage() {
     const ordered = [...categories];
     const [item] = ordered.splice(index, 1);
     ordered.splice(nextIndex, 0, item!);
-    const result = await apiFetch<Category[]>(`/websites/${domainId}/consent/categories/reorder`, {
+    const result = await apiFetch<Category[]>(`/domains/${domainId}/consent/categories/reorder`, {
       method: 'POST',
       body: JSON.stringify({ orderedIds: ordered.map((c) => c.id) }),
     });
@@ -313,7 +313,7 @@ export default function DomainConsentPage() {
   async function saveBanner(e?: FormEvent) {
     e?.preventDefault();
     if (!draft) return;
-    const result = await apiFetch<Policy>(`/websites/${domainId}/consent/policies/${draft.id}`, {
+    const result = await apiFetch<Policy>(`/domains/${domainId}/consent/policies/${draft.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ bannerContent: serializeBanner(banner) }),
     });
@@ -328,7 +328,7 @@ export default function DomainConsentPage() {
   async function publishDraft() {
     await saveBanner();
     if (!draft) return;
-    const result = await apiFetch<Policy>(`/websites/${domainId}/consent/policies/${draft.id}/publish`, {
+    const result = await apiFetch<Policy>(`/domains/${domainId}/consent/policies/${draft.id}/publish`, {
       method: 'POST',
       body: JSON.stringify({ changeSummary: 'Published banner configuration' }),
     });
@@ -343,7 +343,7 @@ export default function DomainConsentPage() {
   async function scheduleDraft() {
     if (!draft || !scheduleAt) return;
     await saveBanner();
-    const result = await apiFetch<Policy>(`/websites/${domainId}/consent/policies/${draft.id}/schedule`, {
+    const result = await apiFetch<Policy>(`/domains/${domainId}/consent/policies/${draft.id}/schedule`, {
       method: 'POST',
       body: JSON.stringify({ scheduledAt: new Date(scheduleAt).toISOString() }),
     });
@@ -356,7 +356,7 @@ export default function DomainConsentPage() {
   }
 
   async function triggerRenewal() {
-    const result = await apiFetch(`/websites/${domainId}/consent/renewals`, {
+    const result = await apiFetch(`/domains/${domainId}/consent/renewals`, {
       method: 'POST',
       body: JSON.stringify({ reason: renewalReason, scope: 'all' }),
     });
