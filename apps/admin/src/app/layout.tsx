@@ -1,5 +1,8 @@
 import type { Metadata } from 'next';
+import { getRuntimePublicEnvScript } from '@/lib/runtime-public-env';
 import './globals.css';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'CMP Admin',
@@ -7,9 +10,12 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const envScript = getRuntimePublicEnvScript();
+
   return (
     <html lang="en">
       <head>
+        {envScript ? <script dangerouslySetInnerHTML={{ __html: envScript }} /> : null}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link

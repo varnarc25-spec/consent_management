@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { getRuntimePublicEnvScript } from '@/lib/runtime-public-env';
 import './globals.css';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'CMP — Consent Management Platform',
   description: 'Enterprise consent management for cookies, trackers, and privacy compliance.',
