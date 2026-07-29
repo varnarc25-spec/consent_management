@@ -6,8 +6,16 @@ export { getApiBaseUrl, getRuntimePublicEnvScript } from '@/lib/runtime-public-e
 let cachedClientToken: string | null = null;
 let cachedClientTokenAt = 0;
 
-async function getClientAccessToken(): Promise<string | null> {
-  if (cachedClientToken && Date.now() - cachedClientTokenAt < 60_000) {
+async function syncAuthSession(): Promise<void> {
+  try {
+    await fetch('/api/auth/sync', { method: 'POST', credentials: 'include' });
+  } catch {
+    // Ignore — access-token may still work via refresh or Auth0 session.
+  }
+}
+
+async function getClientAccessToken(forceRefresh = false): Promise<string | null> {
+  if (!forceRefresh && cachedClientToken && Date.now() - cachedClientTokenAt < 60_000) {
     return cachedClientToken;
   }
   try {
@@ -34,16 +42,19 @@ export async function apiFetch<T>(
     token = (await getClientAccessToken()) ?? undefined;
   }
 
-  let response: Response;
-  try {
-    response = await fetch(`${apiUrl}${path}`, {
+  const doFetch = (bearer?: string) =>
+    fetch(`${apiUrl}${path}`, {
       ...rest,
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
         ...headers,
       },
     });
+
+  let response: Response;
+  try {
+    response = await doFetch(token);
   } catch {
     return {
       ok: false,
@@ -52,6 +63,26 @@ export async function apiFetch<T>(
         message: `Cannot reach the API at ${apiUrl}.`,
       },
     };
+  }
+
+  if (response.status === 401 && !skipAuth && !accessToken) {
+    cachedClientToken = null;
+    cachedClientTokenAt = 0;
+    await syncAuthSession();
+    token = (await getClientAccessToken(true)) ?? undefined;
+    if (token) {
+      try {
+        response = await doFetch(token);
+      } catch {
+        return {
+          ok: false,
+          error: {
+            code: 'NETWORK_ERROR',
+            message: `Cannot reach the API at ${apiUrl}.`,
+          },
+        };
+      }
+    }
   }
 
   return response.json() as Promise<ApiResult<T>>;

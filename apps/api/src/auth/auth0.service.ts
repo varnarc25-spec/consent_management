@@ -43,10 +43,24 @@ export class Auth0Service {
 
     const signingKey = await this.getSigningKey(decoded.header.kid);
     const payload = jwt.verify(idToken, signingKey, {
-      audience: AUTH0_CONFIG.clientId,
       issuer: AUTH0_CONFIG.issuerUrl,
       algorithms: ['RS256'],
     }) as jwt.JwtPayload;
+
+    const clientId = AUTH0_CONFIG.clientId;
+    const aud = payload.aud;
+    const audiences = Array.isArray(aud) ? aud : aud ? [aud] : [];
+    const authorizedParty = typeof payload.azp === 'string' ? payload.azp : undefined;
+    if (
+      clientId &&
+      !audiences.includes(clientId) &&
+      authorizedParty !== clientId
+    ) {
+      throw new UnauthorizedException({
+        code: 'TOKEN_INVALID',
+        message: 'Auth0 token audience does not match this application',
+      });
+    }
 
     const email = typeof payload.email === 'string' ? payload.email : undefined;
     if (!payload.sub || !email) {

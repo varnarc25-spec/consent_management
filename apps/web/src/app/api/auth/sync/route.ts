@@ -1,29 +1,8 @@
 import { getAuth0 } from '@/lib/auth0';
 import { getApiBaseUrl } from '@/lib/runtime-public-env';
-import { ACCESS_COOKIE, REFRESH_COOKIE } from '@/lib/auth-cookies';
+import { setCmpTokenCookies } from '@/lib/cmp-auth-server';
 import { NextResponse } from 'next/server';
 import type { SessionData } from '@auth0/nextjs-auth0/types';
-
-function setCmpTokenCookies(
-  response: NextResponse,
-  tokens: { accessToken: string; refreshToken: string },
-) {
-  const secure = process.env.NODE_ENV === 'production';
-  response.cookies.set(ACCESS_COOKIE, tokens.accessToken, {
-    httpOnly: true,
-    secure,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 15 * 60,
-  });
-  response.cookies.set(REFRESH_COOKIE, tokens.refreshToken, {
-    httpOnly: true,
-    secure,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 7 * 24 * 60 * 60,
-  });
-}
 
 export async function POST() {
   const session = await getAuth0().getSession();

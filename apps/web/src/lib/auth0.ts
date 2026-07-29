@@ -10,8 +10,8 @@ export function getAuth0() {
       clientId: getAuth0ClientId(),
       clientSecret: getAuth0ClientSecret(),
       authorizationParameters: {
-        scope: 'openid profile email',
-        // Marketing site only needs identity login — no CMP API audience.
+        scope: 'openid profile email offline_access',
+        ...(process.env.AUTH0_AUDIENCE ? { audience: process.env.AUTH0_AUDIENCE } : {}),
       },
     });
   }

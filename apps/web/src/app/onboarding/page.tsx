@@ -113,6 +113,7 @@ export default function OnboardingPage() {
   async function createOrg(e: FormEvent) {
     e.preventDefault();
     setError('');
+    await fetch('/api/auth/sync', { method: 'POST', credentials: 'include' });
     const result = await apiFetch('/organizations', {
       method: 'POST',
       body: JSON.stringify({

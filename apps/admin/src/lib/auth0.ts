@@ -10,8 +10,8 @@ export function getAuth0() {
       clientId: getAuth0ClientId(),
       clientSecret: getAuth0ClientSecret(),
       authorizationParameters: {
-        scope: 'openid profile email',
-        // Login uses identity only; CMP API tokens are issued via /auth/auth0/callback after sync.
+        scope: 'openid profile email offline_access',
+        ...(process.env.AUTH0_AUDIENCE ? { audience: process.env.AUTH0_AUDIENCE } : {}),
       },
     });
   }
