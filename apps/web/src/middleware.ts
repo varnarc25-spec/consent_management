@@ -52,25 +52,30 @@ export async function middleware(request: NextRequest) {
       }
     }
 
+    if (isAuth0Configured() && isProtectedPath(pathname) && !isPublicPath(pathname)) {
+      try {
+        const session = await getAuth0().getSession(request);
+        if (!session?.user) {
+          const login = new URL('/auth/login', request.url);
+          login.searchParams.set('returnTo', pathname + request.nextUrl.search);
+          return NextResponse.redirect(login);
+        }
+      } catch (err) {
+        console.error('[middleware] Protected route session check:', err);
+        return NextResponse.redirect(new URL('/auth/login', request.url));
+      }
+    }
+
     if (!isAuth0Configured() || !appBaseUrlMatchesHost(request.nextUrl.host)) {
       return NextResponse.next();
     }
 
-    const authResponse = await getAuth0().middleware(request);
-
-    if (isProtectedPath(pathname) && !isPublicPath(pathname)) {
-      const session = await getAuth0().getSession(request);
-      if (!session?.user) {
-        const login = new URL('/auth/login', request.url);
-        const path = request.nextUrl.pathname + request.nextUrl.search;
-        login.searchParams.set('returnTo', path);
-        return NextResponse.redirect(login);
-      }
-    }
-
-    return authResponse;
+    return await getAuth0().middleware(request);
   } catch (err) {
     console.error('[middleware] Fatal auth error:', err);
+    if (isProtectedPath(request.nextUrl.pathname)) {
+      return NextResponse.redirect(new URL('/auth/login', request.url));
+    }
     return NextResponse.next();
   }
 }
