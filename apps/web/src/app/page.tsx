@@ -1,12 +1,13 @@
 import { Suspense } from 'react';
-import { SiteHeader, ADMIN_URL } from '@/components/site-header';
+import { ADMIN_URL } from '@/components/site-header';
+import { AuthenticatedSiteHeader } from '@/components/authenticated-site-header';
 import { AuthNavLink } from '@/components/auth-nav-link';
 import { LoginErrorBanner } from '@/components/login-error-banner';
 
 export default function HomePage() {
   return (
     <>
-      <SiteHeader />
+      <AuthenticatedSiteHeader />
 
       <main>
         <section className="hero container">

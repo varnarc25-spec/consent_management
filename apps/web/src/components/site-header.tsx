@@ -3,7 +3,13 @@ import { isAuthUiEnabled } from '@cmp/auth';
 
 const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_URL ?? 'http://localhost:3001';
 
-export function SiteHeader({ signedIn }: { signedIn?: boolean }) {
+export function SiteHeader({
+  signedIn,
+  userName,
+}: {
+  signedIn?: boolean;
+  userName?: string;
+}) {
   return (
     <header className="site-header">
       <strong>CMP</strong>
@@ -13,6 +19,9 @@ export function SiteHeader({ signedIn }: { signedIn?: boolean }) {
         {isAuthUiEnabled() ? (
           signedIn ? (
             <>
+              {userName ? (
+                <span style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>{userName}</span>
+              ) : null}
               <AuthNavLink href="/auth/logout">Sign out</AuthNavLink>
               <AuthNavLink className="btn" href={`${ADMIN_URL}/dashboard`} style={{ padding: '0.5rem 1rem' }}>
                 Dashboard
