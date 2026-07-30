@@ -19,13 +19,6 @@ declare global {
       withdrawConsent?: () => void;
       hasConsent?: (category: string) => boolean;
       getVisitorId?: () => string | null;
-      getPolicyVersion?: () => {
-        policyVersionId: string | null;
-        policyVersionNumber: number | null;
-        configVersion: number | null;
-      };
-      getConsentToken?: () => string | null;
-      getVisitorVerificationToken?: () => string | null;
     };
     gtag?: (...args: unknown[]) => void;
     dataLayer?: unknown[];
@@ -86,9 +79,6 @@ export function initFromScript() {
     withdrawConsent: () => sdk.withdrawConsent(),
     hasConsent: (category) => sdk.hasConsent(category),
     getVisitorId: () => sdk.getVisitorId(),
-    getPolicyVersion: () => sdk.getPolicyVersion(),
-    getConsentToken: () => sdk.getConsentToken(),
-    getVisitorVerificationToken: () => sdk.getVisitorVerificationToken(),
     showBanner: () => sdk.showBanner(),
     hideBanner: () => sdk.hideBanner(),
     openPreferences: () => sdk.openPreferences(),
@@ -145,6 +135,5 @@ export { buildConsentState, shouldShowBanner } from './types';
 export { loadConsent, saveConsent, clearConsent } from './consent-store';
 export { renderBanner } from './banner-renderer';
 export { isGlobalPrivacyControlEnabled } from './gpc';
-export { getOrCreateVisitorId, rotateVisitorId, type VisitorOptions } from './visitor-id';
+export { getOrCreateVisitorId, rotateVisitorId } from './visitor-id';
 export { detectVisitorRegion } from './region';
-export { parseConsentToken } from './consent-token';
