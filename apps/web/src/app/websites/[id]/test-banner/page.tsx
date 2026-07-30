@@ -33,6 +33,7 @@ export default function TestBannerPage() {
     script.setAttribute('data-domain-key', domain.domainKey);
     script.setAttribute('data-env', 'production');
     script.setAttribute('data-debug', 'true');
+    script.setAttribute('data-test-scripts', 'true');
     script.onload = () => setScriptLoaded(true);
     document.body.appendChild(script);
 

@@ -7,11 +7,8 @@ const TEST_SCRIPT_IDS = {
   crispWebsite: '00000000-0000-0000-0000-000000000000',
 } as const;
 
-const VARNARC_TEST_DOMAIN_KEY = 'dk_764ba6aa7876dc2206390dd04d8f314b';
-
-export function isTestScriptsEnabled(script: HTMLScriptElement | null, domainKey: string) {
-  if (script?.getAttribute('data-test-scripts') === 'true') return true;
-  return domainKey === VARNARC_TEST_DOMAIN_KEY;
+export function isTestScriptsEnabled(script: HTMLScriptElement | null) {
+  return script?.getAttribute('data-test-scripts') === 'true';
 }
 
 function hasConsent(category: string) {
@@ -106,13 +103,12 @@ export function syncTestScripts() {
 
 export function mountTestScripts(
   cmpScript: HTMLScriptElement | null,
-  domainKey: string,
   cmpSdk: {
     onConsentReady: (listener: () => void) => void;
     onConsentChanged: (listener: () => void) => void;
   },
 ) {
-  if (!isTestScriptsEnabled(cmpScript, domainKey)) return;
+  if (!isTestScriptsEnabled(cmpScript)) return;
   document.addEventListener('cmp:consent-update', syncTestScripts);
   cmpSdk.onConsentReady(() => syncTestScripts());
   cmpSdk.onConsentChanged(() => syncTestScripts());
