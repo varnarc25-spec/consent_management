@@ -22,10 +22,31 @@ const PREVIEW_COUNTRIES = [
   { code: 'JP', label: 'Japan (default profile)' },
 ];
 
+const OPTIONAL_CONSENT_CATEGORIES = [
+  'preferences',
+  'functional',
+  'analytics',
+  'performance',
+  'marketing',
+  'social_media',
+  'unclassified',
+] as const;
+
+const TEST_SCRIPT_MARKERS: Record<(typeof OPTIONAL_CONSENT_CATEGORIES)[number], string> = {
+  preferences: 'cmp-test-preferences',
+  functional: 'cmp-test-crisp',
+  analytics: 'cmp-test-gtag',
+  performance: 'cmp-test-web-vitals',
+  marketing: 'cmp-test-meta-pixel',
+  social_media: 'cmp-test-twitter',
+  unclassified: 'cmp-test-unclassified',
+};
+
 function BlockingStatus() {
   const [consent, setConsent] = useState<Record<string, boolean>>({});
   const [inlineRan, setInlineRan] = useState(false);
   const [geoInfo, setGeoInfo] = useState('');
+  const [testScriptsLoaded, setTestScriptsLoaded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const sync = () => {
@@ -37,6 +58,14 @@ function BlockingStatus() {
         const config = cfg.getConfig();
         setGeoInfo(`${config.region ?? '—'} · ${config.applicableRegulation ?? '—'}`);
       }
+      setTestScriptsLoaded(
+        Object.fromEntries(
+          OPTIONAL_CONSENT_CATEGORIES.map((category) => [
+            category,
+            Boolean(document.getElementById(TEST_SCRIPT_MARKERS[category])),
+          ]),
+        ),
+      );
     };
     sync();
     document.addEventListener('cmp:consent-update', sync);
@@ -50,9 +79,13 @@ function BlockingStatus() {
   return (
     <ul style={{ fontSize: '0.875rem', marginTop: '0.75rem' }}>
       <li>Detected region / regulation: {geoInfo || '—'}</li>
-      <li>Analytics consent: {consent.analytics ? 'granted' : 'denied'}</li>
-      <li>Marketing consent: {consent.marketing ? 'granted' : 'denied'}</li>
-      <li>Social media consent: {consent.social_media ? 'granted' : 'denied'}</li>
+      {OPTIONAL_CONSENT_CATEGORIES.map((category) => (
+        <li key={category}>
+          {category.replace(/_/g, ' ')} consent: {consent[category] ? 'granted' : 'denied'}
+          {' · '}
+          test script: {testScriptsLoaded[category] ? 'loaded' : 'not loaded'}
+        </li>
+      ))}
       <li>Inline analytics script executed: {inlineRan ? 'yes' : 'no'}</li>
     </ul>
   );
@@ -83,6 +116,25 @@ export default function TestBannerPage() {
     inline.textContent = 'window.__cmpInlineRan = true;';
     container.appendChild(inline);
 
+    const preferences = document.createElement('script');
+    preferences.setAttribute('data-cmp-category', 'preferences');
+    preferences.src = 'https://cdn.jsdelivr.net/npm/js-cookie@3/dist/js.cookie.min.js';
+    preferences.async = true;
+    container.appendChild(preferences);
+
+    const functional = document.createElement('script');
+    functional.setAttribute('data-cmp-category', 'functional');
+    functional.src = 'https://client.crisp.chat/l.js';
+    functional.async = true;
+    container.appendChild(functional);
+
+    const performance = document.createElement('script');
+    performance.setAttribute('data-cmp-category', 'performance');
+    performance.src =
+      'https://cdn.jsdelivr.net/npm/web-vitals@3/dist/web-vitals.attribution.iife.js';
+    performance.async = true;
+    container.appendChild(performance);
+
     const external = document.createElement('script');
     external.setAttribute('data-cmp-category', 'marketing');
     external.src = 'https://connect.facebook.net/en_US/fbevents.js';
@@ -106,6 +158,11 @@ export default function TestBannerPage() {
     pixel.alt = '';
     pixel.style.opacity = '0.4';
     container.appendChild(pixel);
+
+    const unclassified = document.createElement('script');
+    unclassified.setAttribute('data-cmp-category', 'unclassified');
+    unclassified.textContent = 'window.__cmpUnclassifiedFixture = true;';
+    container.appendChild(unclassified);
   }, [domain]);
 
   useEffect(() => {
@@ -205,6 +262,7 @@ export default function TestBannerPage() {
         <h3>Blocking fixtures</h3>
         <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
           Inline script, external script, iframe, and tracking pixel below should block until consent.
+          Test scripts load one third-party stub per optional category when consent is granted.
         </p>
         <BlockingStatus />
       </div>

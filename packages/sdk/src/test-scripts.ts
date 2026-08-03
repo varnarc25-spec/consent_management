@@ -7,6 +7,19 @@ const TEST_SCRIPT_IDS = {
   crispWebsite: '00000000-0000-0000-0000-000000000000',
 } as const;
 
+/** Maps each optional consent category to the primary test script element id. */
+export const CMP_TEST_SCRIPT_MARKERS = {
+  preferences: 'cmp-test-preferences',
+  functional: 'cmp-test-crisp',
+  analytics: 'cmp-test-gtag',
+  performance: 'cmp-test-web-vitals',
+  marketing: 'cmp-test-meta-pixel',
+  social_media: 'cmp-test-twitter',
+  unclassified: 'cmp-test-unclassified',
+} as const;
+
+export type CmpTestScriptCategory = keyof typeof CMP_TEST_SCRIPT_MARKERS;
+
 export function isTestScriptsEnabled(script: HTMLScriptElement | null) {
   return script?.getAttribute('data-test-scripts') === 'true';
 }
@@ -28,6 +41,12 @@ function appendScript(id: string, init: (script: HTMLScriptElement) => void) {
   document.head.appendChild(script);
 }
 
+function loadPreferencesScripts() {
+  appendScript('cmp-test-preferences', (script) => {
+    script.src = 'https://cdn.jsdelivr.net/npm/js-cookie@3/dist/js.cookie.min.js';
+  });
+}
+
 function loadAnalyticsScripts() {
   appendScript('cmp-test-gtag', (script) => {
     script.src = `https://www.googletagmanager.com/gtag/js?id=${TEST_SCRIPT_IDS.googleAnalytics}`;
@@ -40,6 +59,13 @@ function loadAnalyticsScripts() {
   });
   appendScript('cmp-test-hotjar', (script) => {
     script.textContent = `(function(h,o,t,j,a,r){h.hj=h.hj||function(){(h.hj.q=h.hj.q||[]).push(arguments)};h._hjSettings={hjid:${TEST_SCRIPT_IDS.hotjar},hjsv:6};a=o.getElementsByTagName('head')[0];r=o.createElement('script');r.async=1;r.src=t+h._hjSettings.hjid+j+h._hjSettings.hjsv;a.appendChild(r);})(window,document,'https://static.hotjar.com/c/hotjar-','.js?sv=');`;
+  });
+}
+
+function loadPerformanceScripts() {
+  appendScript('cmp-test-web-vitals', (script) => {
+    script.src =
+      'https://cdn.jsdelivr.net/npm/web-vitals@3/dist/web-vitals.attribution.iife.js';
   });
 }
 
@@ -68,11 +94,20 @@ function loadSocialScripts() {
   });
 }
 
+function loadUnclassifiedScripts() {
+  appendScript('cmp-test-unclassified', (script) => {
+    script.textContent = 'window.__cmpTestUnclassifiedLoaded=true;';
+  });
+}
+
 export function syncTestScripts() {
-  if (hasConsent('analytics')) loadAnalyticsScripts();
-  if (hasConsent('marketing')) loadMarketingScripts();
+  if (hasConsent('preferences')) loadPreferencesScripts();
   if (hasConsent('functional')) loadFunctionalScripts();
+  if (hasConsent('analytics')) loadAnalyticsScripts();
+  if (hasConsent('performance')) loadPerformanceScripts();
+  if (hasConsent('marketing')) loadMarketingScripts();
   if (hasConsent('social_media')) loadSocialScripts();
+  if (hasConsent('unclassified')) loadUnclassifiedScripts();
 }
 
 export function mountTestScripts(
