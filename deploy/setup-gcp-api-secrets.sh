@@ -73,7 +73,8 @@ gcloud run services update "$SERVICE" \
   --region="$REGION" \
   --image="$IMAGE" \
   --port=8080 \
-  --set-env-vars="NODE_ENV=production,API_PREFIX=api/v1,API_URL=${API_URL},ADMIN_URL=${ADMIN_URL},EMAIL_VERIFICATION_ENABLED=false,DOMAIN_AUTO_VERIFY=false" \
+  --startup-probe=initialDelaySeconds=15,timeoutSeconds=5,periodSeconds=10,failureThreshold=12,httpGet.path=/api/v1/health,httpGet.port=8080 \
+  --set-env-vars="NODE_ENV=production,API_PREFIX=api/v1,API_URL=${API_URL}/api/v1,ADMIN_URL=${ADMIN_URL},WEB_URL=https://consent-management-web-414895350436.us-central1.run.app,EMAIL_VERIFICATION_ENABLED=false,DOMAIN_AUTO_VERIFY=false,AUTH0_DOMAIN=dev-varnarc.us.auth0.com,AUTH0_AUDIENCE=https://api.consent-management.varnarc.com,AUTH0_ISSUER_URL=https://dev-varnarc.us.auth0.com/" \
   --set-secrets="DATABASE_URL=DATABASE_URL:latest,JWT_ACCESS_SECRET=JWT_ACCESS_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest"
 
 echo ""

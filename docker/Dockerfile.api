@@ -20,6 +20,7 @@ COPY --from=pruner /app/out/full/ .
 COPY --from=pruner /app/tsconfig.base.json ./tsconfig.base.json
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+RUN apk add --no-cache openssl libc6-compat ca-certificates
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @cmp/database generate
 RUN pnpm --filter @cmp/sdk build
@@ -34,13 +35,16 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 
+RUN apk add --no-cache openssl libc6-compat ca-certificates
+
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nestjs
 
 COPY --from=builder --chown=nestjs:nodejs /prod/api ./
 COPY --chown=nestjs:nodejs deploy/migrate.sh ./deploy/migrate.sh
-RUN chmod +x ./deploy/migrate.sh
+COPY --chown=nestjs:nodejs deploy/start-api.sh ./start-api.sh
+RUN chmod +x ./deploy/migrate.sh ./start-api.sh
 
 USER nestjs
 EXPOSE 8080
-CMD ["node", "dist/main.js"]
+CMD ["./start-api.sh"]

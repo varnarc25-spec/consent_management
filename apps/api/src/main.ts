@@ -73,4 +73,7 @@ async function bootstrap() {
   console.log(`API listening on http://0.0.0.0:${port}/${API_CONFIG.prefix}`);
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+  console.error('[cmp-api] Fatal startup error:', error);
+  process.exit(1);
+});
