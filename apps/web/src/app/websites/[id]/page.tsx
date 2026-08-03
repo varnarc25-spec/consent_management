@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
 import { LoadingScreen } from '@/components/loading-screen';
+import { WebsiteSetupSteps } from '@/components/website-setup-steps';
 import { apiFetch } from '@/lib/api';
 
 interface Domain {
@@ -21,6 +22,7 @@ interface Domain {
   enabled: boolean;
   groupName: string | null;
   scanLimit: number;
+  sdkLastSeenAt: string | null;
   isProduction: boolean;
 }
 
@@ -182,6 +184,15 @@ export default function DomainDetailPage() {
         )}
       </p>
 
+      <div className="card website-setup-card" style={{ marginTop: '1.5rem' }}>
+        <WebsiteSetupSteps
+          domainId={domain.id}
+          hostname={domain.hostname}
+          verificationStatus={domain.verificationStatus}
+          sdkLastSeenAt={domain.sdkLastSeenAt}
+        />
+      </div>
+
       {message && <p className="success">{message}</p>}
       {error && <p className="error">{error}</p>}
 
@@ -235,7 +246,7 @@ export default function DomainDetailPage() {
       </div>
 
       <div className="grid-2" style={{ marginTop: '1.5rem' }}>
-        <div className="card">
+        <div className="card" id="setup-verify">
           <h3>Domain verification</h3>
           <p style={{ fontSize: '0.875rem', color: 'var(--muted)', marginBottom: '1rem' }}>
             Status: <strong>{domain?.verificationStatus}</strong>
@@ -261,7 +272,7 @@ export default function DomainDetailPage() {
           )}
         </div>
 
-        <div className="card">
+        <div className="card" id="setup-install">
           <h3>Installation script</h3>
           {install && (
             <>
@@ -285,7 +296,7 @@ export default function DomainDetailPage() {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: '1.5rem' }}>
+      <div className="card" id="setup-validate" style={{ marginTop: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3>Installation validation</h3>
           <button className="btn btn-secondary" type="button" onClick={runValidation}>

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ProtectedLayout } from '@/components/protected-layout';
 import { apiFetch, clearStoredTokens } from '@/lib/api';
@@ -35,10 +36,15 @@ export default function SettingsPage() {
     <ProtectedLayout>
       <div className="page-header">
         <div>
-          <h1>Settings</h1>
-          <p className="page-subtitle">Security preferences and login activity.</p>
+          <h1>Security &amp; activity</h1>
+          <p className="page-subtitle">Session security and login history.</p>
         </div>
       </div>
+
+      <nav className="settings-subnav" aria-label="Settings sections">
+        <Link href="/settings/organization">Organization</Link>
+        <Link href="/settings" className="active">Security &amp; activity</Link>
+      </nav>
 
       <div className="card">
         <div className="card-header">

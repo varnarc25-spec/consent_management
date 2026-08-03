@@ -4,11 +4,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { CurrentUser } from '@cmp/types';
 import { CmpLogo } from '@/components/cmp-logo';
-import { clearStoredTokens } from '@/lib/api';
+import { ProfileMenu } from '@/components/profile-menu';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard' },
-  { href: '/settings', label: 'Settings' },
 ];
 
 export function UserShell({
@@ -20,14 +19,12 @@ export function UserShell({
 }) {
   const pathname = usePathname();
 
-  function handleLogout() {
-    clearStoredTokens();
-    window.location.assign('/auth/logout');
-  }
-
   function isNavActive(href: string) {
     if (href === '/dashboard') {
       return pathname === '/dashboard' || pathname.startsWith('/websites');
+    }
+    if (href === '/settings') {
+      return pathname.startsWith('/settings');
     }
     return pathname === href || pathname.startsWith(`${href}/`);
   }
@@ -49,12 +46,7 @@ export function UserShell({
           ))}
         </nav>
         <div className="nav-actions">
-          <span className="nav-user">
-            {user.firstName} {user.lastName}
-          </span>
-          <button className="btn btn-secondary" onClick={handleLogout} type="button">
-            Logout
-          </button>
+          <ProfileMenu user={user} />
         </div>
       </header>
       <main className="container portal-main">{children}</main>
