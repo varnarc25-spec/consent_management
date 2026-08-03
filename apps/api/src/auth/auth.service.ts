@@ -10,7 +10,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { AUTH_ERROR_CODES } from '@cmp/auth';
-import { AUTH_CONFIG, JWT_CONFIG, SECURITY_CONFIG } from '@cmp/config';
+import { AUTH_CONFIG, JWT_CONFIG, SECURITY_CONFIG, APP_URLS } from '@cmp/config';
 import type { Auth0TokenClaims, AuthTokens, CurrentUser, PermissionSlug, RoleSlug } from '@cmp/types';
 import type { Repositories } from '@cmp/database';
 import { REPOS } from '../database/database.module';
@@ -399,13 +399,16 @@ export class AuthService {
 
   private toCurrentUser(user: UserWithRoles): CurrentUser {
     const roles = user.roles.map((ur) => ur.role.slug as RoleSlug);
-    const permissions = [
-      ...new Set(
-        user.roles.flatMap((ur) =>
-          ur.role.permissions.map((rp) => rp.permission.slug as PermissionSlug),
-        ),
+    const permissions = new Set<PermissionSlug>(
+      user.roles.flatMap((ur) =>
+        ur.role.permissions.map((rp) => rp.permission.slug as PermissionSlug),
       ),
-    ];
+    );
+    for (const assignment of user.customRoles ?? []) {
+      for (const permission of assignment.customRole.permissions) {
+        permissions.add(permission as PermissionSlug);
+      }
+    }
 
     return {
       id: user.id,
@@ -415,7 +418,36 @@ export class AuthService {
       emailVerified: AUTH_CONFIG.emailVerificationEnabled ? user.emailVerified : true,
       organizationId: user.organizationId,
       roles,
-      permissions,
+      permissions: [...permissions],
+    };
+  }
+
+  async getSsoLoginHint(orgSlug: string) {
+    const org = await this.repos.organizations.findBySlug(orgSlug);
+    if (!org) {
+      return { ok: false, error: { code: 'ORG_NOT_FOUND', message: 'Organization not found' } };
+    }
+    const sso = (org.ssoConfig as {
+      enabled?: boolean;
+      connectionName?: string;
+      provider?: string;
+    } | null) ?? {};
+    if (!sso.enabled || !sso.connectionName) {
+      return {
+        ok: false,
+        error: { code: 'SSO_NOT_CONFIGURED', message: 'SSO is not enabled for this organization' },
+      };
+    }
+    const adminBase = process.env.ADMIN_URL ?? APP_URLS.admin;
+    return {
+      ok: true,
+      data: {
+        organizationSlug: org.slug,
+        connectionName: sso.connectionName,
+        provider: sso.provider ?? 'oidc',
+        loginHint: `Use Auth0 Universal Login with connection="${sso.connectionName}"`,
+        adminLoginUrl: `${adminBase}/auth/login?connection=${encodeURIComponent(sso.connectionName)}`,
+      },
     };
   }
 

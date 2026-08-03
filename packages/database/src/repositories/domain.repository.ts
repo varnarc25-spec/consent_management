@@ -127,10 +127,16 @@ export class DomainRepository {
       consentEventDetected?: boolean;
       autoBlockingEnabled?: boolean;
       googleConsentModeDetected?: boolean;
+      googleConsentModeEnabled?: boolean;
+      googleConsentModeDefaultApplied?: boolean;
+      googleConsentModeUpdateApplied?: boolean;
+      googleConsentModeMode?: 'basic' | 'advanced';
       duplicateScripts?: number;
       jsErrors?: string[];
       scriptLoadedFirst?: boolean;
       defaultConsentApplied?: boolean;
+      preConsentViolations?: number;
+      integrationSource?: string;
     },
   ) {
     return this.prisma.domain.updateMany({

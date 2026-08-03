@@ -61,4 +61,14 @@ export class EmailService {
        <p><a href="${link}">${link}</a></p>`,
     );
   }
+
+  async sendScheduledReport(email: string, reportType: string, summary: unknown) {
+    const preview = JSON.stringify(summary, null, 2).slice(0, 4000);
+    await this.send(
+      email,
+      `CMP scheduled report: ${reportType}`,
+      `<p>Your scheduled <strong>${reportType}</strong> report is attached below.</p>
+       <pre style="background:#f4f4f5;padding:1rem;overflow:auto;font-size:12px;">${preview}</pre>`,
+    );
+  }
 }

@@ -5,6 +5,37 @@ import type { CreateOrganizationInput } from '@cmp/validation';
 import { REPOS } from '../database/database.module';
 import { AuditService } from '../audit/audit.service';
 
+type OrganizationRecord = NonNullable<Awaited<ReturnType<Repositories['organizations']['findById']>>>;
+
+function toOrganizationResponse(org: OrganizationRecord) {
+  return {
+    id: org.id,
+    name: org.name,
+    slug: org.slug,
+    legalName: org.legalName,
+    businessType: org.businessType,
+    country: org.country,
+    timezone: org.timezone,
+    defaultLanguage: org.defaultLanguage,
+    defaultRegulation: org.defaultRegulation,
+    billingEmail: org.billingEmail,
+    technicalContact: org.technicalContact,
+    privacyContact: org.privacyContact,
+    dpoDetails: org.dpoDetails,
+    storeConsentIpAddress: org.storeConsentIpAddress,
+    geoTargetingDisabled: org.geoTargetingDisabled,
+    whiteLabel: (org.whiteLabel as Record<string, unknown> | null) ?? null,
+    ssoConfig: (org.ssoConfig as Record<string, unknown> | null) ?? null,
+    retentionPolicy: (org.retentionPolicy as Record<string, unknown> | null) ?? null,
+    dataResidencyRegion: org.dataResidencyRegion,
+    onboardingStep: org.onboardingStep,
+    onboardingComplete: org.onboardingComplete,
+    status: org.status,
+    createdAt: org.createdAt,
+    updatedAt: org.updatedAt,
+  };
+}
+
 @Injectable()
 export class OrganizationsService {
   constructor(
@@ -35,12 +66,15 @@ export class OrganizationsService {
       ...meta,
     });
 
-    return org;
+    return toOrganizationResponse(
+      (await this.repos.organizations.findById(org.id))!,
+    );
   }
 
   async getMine(user: CurrentUser) {
     if (!user.organizationId) return null;
-    return this.repos.organizations.findById(user.organizationId);
+    const org = await this.repos.organizations.findById(user.organizationId);
+    return org ? toOrganizationResponse(org) : null;
   }
 
   async update(user: CurrentUser, input: Partial<CreateOrganizationInput>, meta: AuditMeta) {
@@ -65,7 +99,7 @@ export class OrganizationsService {
       ...meta,
     });
 
-    return updated;
+    return toOrganizationResponse(updated);
   }
 
   async softDelete(user: CurrentUser, meta: AuditMeta) {
@@ -89,14 +123,14 @@ export class OrganizationsService {
       ...meta,
     });
 
-    return deleted;
+    return toOrganizationResponse(deleted);
   }
 
   async permanentDelete(
     user: CurrentUser,
     input: { confirmation: 'DELETE'; organizationName: string },
     meta: AuditMeta,
-  ) {
+  ): Promise<{ deleted: boolean }> {
     if (!user.organizationId) {
       throw new BadRequestException({ code: 'NO_ORG', message: 'No organization found' });
     }
@@ -128,7 +162,8 @@ export class OrganizationsService {
       ...meta,
     });
 
-    return this.repos.organizations.permanentDelete(user.organizationId);
+    await this.repos.organizations.permanentDelete(user.organizationId);
+    return { deleted: true };
   }
 
   async getOnboarding(user: CurrentUser) {
@@ -141,7 +176,7 @@ export class OrganizationsService {
       step: org?.onboardingStep ?? 3,
       complete: org?.onboardingComplete ?? false,
       hasOrganization: true,
-      organization: org,
+      organization: org ? toOrganizationResponse(org) : null,
       domainCount: domains.length,
       hasVerifiedDomain: domains.some((d) => d.verificationStatus === 'VERIFIED'),
     };
@@ -176,7 +211,7 @@ export class OrganizationsService {
       ...meta,
     });
 
-    return updated;
+    return toOrganizationResponse(updated);
   }
 }
 

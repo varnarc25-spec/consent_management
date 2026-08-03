@@ -1,0 +1,28 @@
+.cmp-cm-admin .cmp-cm-result {
+  background: #f6f7f7;
+  border: 1px solid #c3c4c7;
+  padding: 1rem;
+  max-width: 720px;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+
+.cmp-wp-privacy-button {
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 0;
+  background: #111827;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.cmp-wp-privacy-link {
+  background: none;
+  border: 0;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}

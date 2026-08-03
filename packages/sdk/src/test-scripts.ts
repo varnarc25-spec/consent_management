@@ -28,30 +28,6 @@ function appendScript(id: string, init: (script: HTMLScriptElement) => void) {
   document.head.appendChild(script);
 }
 
-function ensureGoogleConsentModeStub() {
-  if (typeof window.gtag === 'function') return;
-  window.dataLayer = window.dataLayer || [];
-  window.gtag = (...args: unknown[]) => {
-    window.dataLayer?.push(args);
-  };
-  window.gtag('consent', 'default', {
-    analytics_storage: 'denied',
-    ad_storage: 'denied',
-    ad_user_data: 'denied',
-    ad_personalization: 'denied',
-  });
-}
-
-function updateGoogleConsentMode() {
-  if (typeof window.gtag !== 'function') return;
-  window.gtag('consent', 'update', {
-    analytics_storage: hasConsent('analytics') ? 'granted' : 'denied',
-    ad_storage: hasConsent('marketing') ? 'granted' : 'denied',
-    ad_user_data: hasConsent('marketing') ? 'granted' : 'denied',
-    ad_personalization: hasConsent('marketing') ? 'granted' : 'denied',
-  });
-}
-
 function loadAnalyticsScripts() {
   appendScript('cmp-test-gtag', (script) => {
     script.src = `https://www.googletagmanager.com/gtag/js?id=${TEST_SCRIPT_IDS.googleAnalytics}`;
@@ -93,8 +69,6 @@ function loadSocialScripts() {
 }
 
 export function syncTestScripts() {
-  ensureGoogleConsentModeStub();
-  updateGoogleConsentMode();
   if (hasConsent('analytics')) loadAnalyticsScripts();
   if (hasConsent('marketing')) loadMarketingScripts();
   if (hasConsent('functional')) loadFunctionalScripts();

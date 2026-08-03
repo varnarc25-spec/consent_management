@@ -1,4 +1,5 @@
 import { trapFocus } from './a11y';
+import { isRtlLanguage } from './language';
 import { sanitizeBasicHtml } from './sanitize';
 import {
   buildConsentState,
@@ -8,6 +9,7 @@ import {
   type BannerContent,
   type CategorySnapshot,
   type CmpConfig,
+  type ConsentMetadata,
 } from './types';
 
 const STYLES = `
@@ -22,6 +24,9 @@ const STYLES = `
 .cmp-layout-fullscreen{inset:1rem;border-radius:var(--cmp-radius)}
 .cmp-layout-side_panel{top:0;right:0;bottom:0;width:min(420px,100vw);border-left:1px solid #e5e7eb}
 .cmp-layout-compact{bottom:1rem;left:1rem;right:1rem;max-width:720px;margin:0 auto;border-radius:var(--cmp-radius)}
+.cmp-banner-root[dir=rtl] .cmp-close{left:.75rem;right:auto}
+.cmp-banner-root[dir=rtl] .cmp-layout-corner_popup{left:1rem;right:auto}
+.cmp-banner-root[dir=rtl] .cmp-layout-side_panel{left:0;right:auto;border-left:0;border-right:1px solid #e5e7eb}
 .cmp-inner{padding:var(--cmp-spacing)}
 .cmp-logo{display:block;max-height:40px;margin-bottom:.75rem}
 .cmp-step-indicator{display:flex;gap:.5rem;margin-bottom:1rem;font-size:.75rem;color:#6b7280}
@@ -45,6 +50,10 @@ const STYLES = `
 .cmp-category p,.cmp-vendor-note{margin:.25rem 0 0;font-size:.75rem;color:#4b5563}
 .cmp-close{position:absolute;top:.75rem;right:.75rem;background:transparent;border:0;font-size:1.25rem;cursor:pointer;color:var(--cmp-text)}
 .cmp-summary{margin:0 0 1rem;padding:.75rem;background:#f9fafb;border-radius:var(--cmp-radius);font-size:.875rem}
+.cmp-metadata{margin:0 0 1rem;padding:.75rem;background:#f3f4f6;border-radius:var(--cmp-radius);font-size:.8125rem;color:#374151}
+.cmp-metadata dt{font-weight:600;margin-top:.375rem}
+.cmp-metadata dt:first-child{margin-top:0}
+.cmp-metadata dd{margin:.125rem 0 0}
 @media (max-width:640px){.cmp-inner{padding:.875rem}.cmp-actions{flex-direction:column}.cmp-btn{width:100%}}
 @media (prefers-reduced-motion:reduce){.cmp-banner,.cmp-overlay{transition:none}}
 `;
@@ -77,6 +86,10 @@ export function renderBanner(
   const root = document.createElement('div');
   root.className = 'cmp-banner-root';
   root.setAttribute('data-cmp-banner', 'true');
+  const activeLanguage = config.activeLanguage ?? config.defaultLanguage ?? 'en';
+  const rtl = isRtlLanguage(activeLanguage);
+  root.setAttribute('dir', rtl ? 'rtl' : 'ltr');
+  root.setAttribute('lang', activeLanguage);
 
   const style = document.createElement('style');
   style.textContent = STYLES;
@@ -283,11 +296,52 @@ export function renderBanner(
     appendLegal(inner, banner);
   }
 
+  function formatMetadataDate(value: string | null) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(date);
+  }
+
+  function renderConsentMetadata(metadata: ConsentMetadata) {
+    const block = document.createElement('dl');
+    block.className = 'cmp-metadata';
+    block.setAttribute('aria-label', 'Consent information');
+
+    const entries: Array<[string, string | null]> = [
+      ['Consent date', formatMetadataDate(metadata.savedAt)],
+      [
+        'Policy version',
+        metadata.policyVersionNumber != null
+          ? String(metadata.policyVersionNumber)
+          : metadata.policyVersionId,
+      ],
+      ['Expires', formatMetadataDate(metadata.expiresAt)],
+    ];
+
+    entries.forEach(([label, value]) => {
+      if (!value) return;
+      const dt = document.createElement('dt');
+      dt.textContent = label;
+      const dd = document.createElement('dd');
+      dd.textContent = value;
+      block.append(dt, dd);
+    });
+
+    return block.childElementCount > 0 ? block : null;
+  }
+
   function renderPreferences(multiStepMode = false) {
     const title = document.createElement('h2');
     title.id = 'cmp-banner-title';
     title.className = 'cmp-title';
     title.textContent = banner.preferencesButton;
+
+    const metadata = config.consentMetadata;
+    const metadataBlock = metadata ? renderConsentMetadata(metadata) : null;
 
     const prefs = document.createElement('div');
     prefs.className = 'cmp-preferences';
@@ -334,7 +388,11 @@ export function renderBanner(
     back.setAttribute('data-cmp-action', 'back');
 
     actions.append(save, back);
-    inner.append(title, prefs, actions);
+    if (metadataBlock) {
+      inner.append(title, metadataBlock, prefs, actions);
+    } else {
+      inner.append(title, prefs, actions);
+    }
     appendLegal(inner, banner);
   }
 

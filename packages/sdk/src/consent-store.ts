@@ -15,6 +15,8 @@ export interface StoredConsent {
   expiresAt: number | null;
   savedAt: number;
   checksum?: string;
+  consentToken?: string;
+  verificationToken?: string;
 }
 
 export function getStorageKey(domainKey: string) {
@@ -52,4 +54,16 @@ export function saveConsent(
 
 export function clearConsent(domainKey: string) {
   removeStorage(getStorageKey(domainKey));
+}
+
+export function wasExpiredConsent(domainKey: string, configVersion: number): boolean {
+  try {
+    const raw = readStorage(getStorageKey(domainKey));
+    if (!raw) return false;
+    const data = JSON.parse(raw) as StoredConsent;
+    if (data.configVersion !== configVersion) return false;
+    return Boolean(data.expiresAt && Date.now() > data.expiresAt);
+  } catch {
+    return false;
+  }
 }

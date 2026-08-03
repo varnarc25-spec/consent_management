@@ -7,10 +7,20 @@ import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { DomainsModule } from './domains/domains.module';
 import { ConsentModule } from './consent/consent.module';
+import { ConsentRecordsModule } from './consent-records/consent-records.module';
+import { ScansModule } from './scans/scans.module';
+import { CookiesModule } from './cookies/cookies.module';
+import { BlockingModule } from './blocking/blocking.module';
 import { PublicCmpModule } from './public/public-cmp.module';
 import { AuditModule } from './audit/audit.module';
 import { UsersModule } from './users/users.module';
 import { RolesModule } from './roles/roles.module';
+import { InsightsModule } from './insights/insights.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
+import { DeveloperModule } from './developer/developer.module';
+import { EnterpriseModule } from './enterprise/enterprise.module';
+import { AiModule } from './ai/ai.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from './auth/guards/permissions.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -27,10 +37,20 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
     OrganizationsModule,
     DomainsModule,
     ConsentModule,
+    ConsentRecordsModule,
+    ScansModule,
+    CookiesModule,
+    BlockingModule,
     PublicCmpModule,
     AuditModule,
     UsersModule,
     RolesModule,
+    InsightsModule,
+    ApiKeysModule,
+    WebhooksModule,
+    DeveloperModule,
+    EnterpriseModule,
+    AiModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

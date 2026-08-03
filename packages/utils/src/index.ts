@@ -113,7 +113,67 @@ export {
 } from './contrast';
 export { sanitizeBannerCustomCss, scopeBannerCustomCss } from './banner-css';
 export { BANNER_TEXT_TEMPLATES, type BannerTextTemplate } from './banner-templates';
+export { deriveSharedCookieDomain } from './cookie-domain';
+export {
+  EU_COUNTRIES,
+  COUNTRY_GROUP_MEMBERS,
+  countryMatchesGroup,
+  countryInGroups,
+} from './geo/country-groups';
+export {
+  detectCountryFromHeaders,
+  detectClientGeoHints,
+  mergeDetectedGeo,
+  type DetectedGeo,
+  type GeoDetectionSource,
+} from './geo/geo-detection';
+export {
+  REGULATION_PROFILES,
+  getRegulationProfile,
+  listRegulationProfiles,
+  type RegulationProfile,
+  type ConsentModel,
+} from './geo/regulation-profiles';
+export {
+  resolveRegionalRule,
+  resolveGeoRegulation,
+  applyRegulationProfile,
+  DEFAULT_REGIONAL_RULES,
+  type RegionalRule,
+  type GeoRegulationSettings,
+  type ResolvedGeoRegulation,
+} from './geo/regional-rules';
+export {
+  lookupCountryFromIp,
+  extractClientIp,
+  type IpGeoResult,
+} from './geo/ip-geolocation';
+export {
+  RTL_LANGUAGES,
+  COMMON_LANGUAGE_OPTIONS,
+  BANNER_TRANSLATABLE_FIELDS,
+  normalizeLanguageCode,
+  isRtlLanguage,
+  pickSupportedLanguage,
+  resolveLanguagePriority,
+  findTranslationEntry,
+  applyBannerTranslation,
+  applyCategoryTranslations,
+  listMissingBannerTranslations,
+  listMissingCategoryTranslations,
+  suggestBannerTranslations,
+  type BannerTranslatableField,
+  type BannerTranslationEntry,
+  type BannerSourceForTranslation,
+} from './language/language';
 
+export { computeGroupVisitorId } from './enterprise/group-visitor';
+export {
+  classifyCookieHeuristic,
+  isSuspiciousNecessaryClassification,
+  generateBannerTextHeuristic,
+  type CookieClassificationHint,
+} from './ai/heuristics';
 export function downloadBlob(content: string, filename: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);

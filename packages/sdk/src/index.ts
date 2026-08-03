@@ -1,6 +1,7 @@
 import { CmpSdk } from './cmp-sdk';
 import { clearConsent } from './consent-store';
 import { mountTestScripts } from './test-scripts';
+import type { CmpConfig, ConsentMetadata } from './types';
 
 declare global {
   interface Window {
@@ -13,12 +14,29 @@ declare global {
       showBanner?: () => void;
       hideBanner?: () => void;
       openPreferences?: () => void;
+      openCookieDeclaration?: (target?: HTMLElement | string) => void;
+      setLanguage?: (language: string) => void;
+      getActiveLanguage?: () => string;
       getConsent?: () => Record<string, boolean>;
+      setConsent?: (categories: Record<string, boolean>) => void;
       acceptAll?: () => void;
       rejectAll?: () => void;
       withdrawConsent?: () => void;
+      setAuthenticatedUserId?: (userId: string | null) => void;
       hasConsent?: (category: string) => boolean;
       getVisitorId?: () => string | null;
+      getPolicyVersion?: () => {
+        policyVersionId: string | null;
+        policyVersionNumber: number | null;
+        configVersion: number | null;
+      };
+      getConsentToken?: () => string | null;
+      getVisitorVerificationToken?: () => string | null;
+      getConsentMetadata?: () => ConsentMetadata | null;
+      getConfig?: () => CmpConfig | null;
+      getGoogleConsentModeDiagnostics?: () => Record<string, unknown> | null;
+      onConsentReady?: (listener: (config: CmpConfig) => void) => () => void;
+      onConsentChanged?: (listener: (consent: Record<string, boolean>) => void) => () => void;
     };
     gtag?: (...args: unknown[]) => void;
     dataLayer?: unknown[];
@@ -65,7 +83,10 @@ export function initFromScript() {
   }
 
   const apiBase = getApiBase(script);
-  const sdk = new CmpSdk(domainKey, apiBase, debug);
+  const previewCountry = script?.getAttribute('data-preview-country') ?? undefined;
+  const scriptLanguage = script?.getAttribute('data-lang') ?? undefined;
+  const integrationSource = script?.getAttribute('data-integration') ?? undefined;
+  const sdk = new CmpSdk(domainKey, apiBase, debug, { previewCountry, scriptLanguage });
   window.CMP = sdk;
 
   window.__CMP__ = {
@@ -74,14 +95,27 @@ export function initFromScript() {
     ready: false,
     consent: { strictly_necessary: true },
     getConsent: () => sdk.getConsent(),
+    setConsent: (categories) => sdk.setConsent(categories),
     acceptAll: () => sdk.acceptAll(),
     rejectAll: () => sdk.rejectAll(),
     withdrawConsent: () => sdk.withdrawConsent(),
+    setAuthenticatedUserId: (userId: string | null) => sdk.setAuthenticatedUserId(userId),
     hasConsent: (category) => sdk.hasConsent(category),
     getVisitorId: () => sdk.getVisitorId(),
+    getPolicyVersion: () => sdk.getPolicyVersion(),
+    getConsentToken: () => sdk.getConsentToken(),
+    getVisitorVerificationToken: () => sdk.getVisitorVerificationToken(),
+    getConsentMetadata: () => sdk.getConsentMetadata(),
+    getConfig: () => sdk.getConfig(),
+    getGoogleConsentModeDiagnostics: () => sdk.getGoogleConsentModeDiagnostics(),
+    onConsentReady: (listener) => sdk.onConsentReady(listener),
+    onConsentChanged: (listener) => sdk.onConsentChanged(listener),
     showBanner: () => sdk.showBanner(),
     hideBanner: () => sdk.hideBanner(),
     openPreferences: () => sdk.openPreferences(),
+    openCookieDeclaration: (target) => sdk.openCookieDeclaration(target),
+    setLanguage: (language: string) => sdk.setLanguage(language),
+    getActiveLanguage: () => sdk.getActiveLanguage(),
   };
 
   sdk.onConsentReady(() => {
@@ -103,21 +137,27 @@ export function initFromScript() {
   });
 
   void (async () => {
+    await sdk.init();
+
+    const gcm = sdk.getGoogleConsentModeDiagnostics();
     await sendHeartbeat(apiBase, {
       domainKey,
       hostname: location.hostname,
+      integrationSource,
       scriptLoaded: true,
       consentEventDetected: false,
       autoBlockingEnabled: true,
-      googleConsentModeDetected:
-        typeof window.gtag === 'function' || typeof window.dataLayer !== 'undefined',
+      googleConsentModeDetected: Boolean(gcm?.gtagAvailable && gcm?.defaultApplied),
+      googleConsentModeEnabled: gcm?.enabled ?? true,
+      googleConsentModeDefaultApplied: gcm?.defaultApplied ?? false,
+      googleConsentModeUpdateApplied: gcm?.updateApplied ?? false,
+      googleConsentModeMode: gcm?.mode as 'basic' | 'advanced' | undefined,
       duplicateScripts: document.querySelectorAll(`script[data-domain-key="${domainKey}"]`).length,
       jsErrors: jsErrors.slice(0, 5),
       scriptLoadedFirst: true,
       defaultConsentApplied: true,
+      preConsentViolations: sdk.getBlockingViolationCount(),
     });
-
-    await sdk.init();
   })();
 
   return {
@@ -132,8 +172,11 @@ if (typeof document !== 'undefined') {
 
 export { CmpSdk } from './cmp-sdk';
 export { buildConsentState, shouldShowBanner } from './types';
+export type { ConsentMetadata } from './types';
 export { loadConsent, saveConsent, clearConsent } from './consent-store';
 export { renderBanner } from './banner-renderer';
+export { mountCookieDeclaration } from './cookie-declaration';
+export type { CookieDeclarationEntry, CookieDeclarationOptions, CookieDeclarationHandle } from './cookie-declaration';
 export { isGlobalPrivacyControlEnabled } from './gpc';
 export { getOrCreateVisitorId, rotateVisitorId } from './visitor-id';
 export { detectVisitorRegion } from './region';

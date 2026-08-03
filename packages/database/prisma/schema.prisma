@@ -39,6 +39,12 @@ model Organization {
   technicalContact   String?            @map("technical_contact")
   privacyContact     String?            @map("privacy_contact")
   dpoDetails         String?            @map("dpo_details")
+  storeConsentIpAddress Boolean         @default(true) @map("store_consent_ip_address")
+  geoTargetingDisabled  Boolean         @default(false) @map("geo_targeting_disabled")
+  whiteLabel            Json?           @map("white_label")
+  ssoConfig             Json?           @map("sso_config")
+  retentionPolicy       Json?           @map("retention_policy")
+  dataResidencyRegion   String?         @map("data_residency_region") @db.VarChar(32)
   onboardingStep     Int                @default(0) @map("onboarding_step")
   onboardingComplete Boolean            @default(false) @map("onboarding_complete")
   status             OrganizationStatus @default(ACTIVE)
@@ -49,6 +55,12 @@ model Organization {
   users     User[]
   domains   Domain[]
   auditLogs AuditLog[]
+  notifications Notification[]
+  reportSchedules ReportSchedule[]
+  apiKeys         ApiKey[]
+  webhookEndpoints WebhookEndpoint[]
+  domainGroups    DomainGroup[]
+  customRoles     OrganizationCustomRole[]
 
   @@index([status])
   @@map("organizations")
@@ -79,6 +91,8 @@ model User {
   auditLogs           AuditLog[]
   emailVerifications  EmailVerificationToken[]
   passwordResetTokens PasswordResetToken[]
+  customRoles         UserCustomRole[]
+  domainAccess        UserDomainAccess[]
 
   @@index([organizationId])
   @@index([status])
@@ -283,6 +297,14 @@ model Domain {
   policyVersions       PolicyVersion[]
   consentRenewals      ConsentRenewal[]
   consentSubmissions   ConsentSubmission[]
+  domainScans          DomainScan[]
+  domainCookies        DomainCookie[]
+  blockingViolations   BlockingViolation[]
+  notifications        Notification[]
+  groupMembers         DomainGroupMember[]
+  userAccess           UserDomainAccess[]
+  aiSuggestions        AiSuggestion[]
+  regressionTestRuns   RegressionTestRun[]
 
   @@index([organizationId])
   @@index([verificationStatus])
@@ -317,6 +339,27 @@ enum PolicyVersionStatus {
   ARCHIVED
 
   @@map("policy_version_status")
+}
+
+enum ConsentEventType {
+  INITIAL_CONSENT
+  CONSENT_UPDATE
+  CONSENT_WITHDRAWAL
+  CONSENT_RENEWAL
+  POLICY_RENEWAL
+  CONSENT_EXPIRATION
+  ADMIN_INVALIDATION
+
+  @@map("consent_event_type")
+}
+
+enum ConsentStatus {
+  GRANTED
+  PARTIAL
+  REJECTED
+  WITHDRAWN
+
+  @@map("consent_status")
 }
 
 model ConsentCategory {
@@ -393,25 +436,587 @@ model ConsentRenewal {
 }
 
 model ConsentSubmission {
-  id               String    @id @default(uuid()) @db.Uuid
-  domainId         String    @map("domain_id") @db.Uuid
-  organizationId   String    @map("organization_id") @db.Uuid
-  visitorId        String    @map("visitor_id")
-  policyVersionId  String?   @map("policy_version_id") @db.Uuid
-  configVersion    Int       @map("config_version")
-  categories       Json
-  region           String?
-  language         String?
-  collectionMethod String    @map("collection_method")
-  checksum         String
-  userAgent        String?   @map("user_agent")
-  expiresAt        DateTime? @map("expires_at")
-  withdrawnAt      DateTime? @map("withdrawn_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
+  id                 String            @id @default(uuid()) @db.Uuid
+  domainId           String            @map("domain_id") @db.Uuid
+  organizationId     String            @map("organization_id") @db.Uuid
+  visitorId          String            @map("visitor_id")
+  authenticatedUserId String?           @map("authenticated_user_id") @db.Uuid
+  policyVersionId    String?           @map("policy_version_id") @db.Uuid
+  configVersion      Int               @map("config_version")
+  bannerVersion      Int?              @map("banner_version")
+  categories         Json
+  vendors            Json?
+  region             String?
+  language           String?
+  regulation         String?
+  collectionMethod   String            @map("collection_method")
+  eventType          ConsentEventType  @default(INITIAL_CONSENT) @map("event_type")
+  consentStatus      ConsentStatus     @default(PARTIAL) @map("consent_status")
+  checksum           String
+  proofHash          String            @map("proof_hash")
+  policySnapshotHash String?           @map("policy_snapshot_hash")
+  policySnapshot     Json?             @map("policy_snapshot")
+  previousRecordId   String?           @map("previous_record_id") @db.Uuid
+  userAgent          String?           @map("user_agent")
+  ipAddressHash      String?           @map("ip_address_hash")
+  expiresAt          DateTime?         @map("expires_at")
+  withdrawnAt        DateTime?         @map("withdrawn_at")
+  groupVisitorId   String?           @map("group_visitor_id")
+  createdAt          DateTime          @default(now()) @map("created_at")
 
   domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
 
-  @@index([domainId, visitorId])
+  @@index([organizationId, createdAt])
+  @@index([domainId, visitorId, createdAt])
   @@index([domainId, createdAt])
+  @@index([proofHash])
+  @@index([groupVisitorId, createdAt])
   @@map("consent_submissions")
+}
+
+enum ScanStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+
+  @@map("scan_status")
+}
+
+enum ScanFindingType {
+  COOKIE
+  LOCAL_STORAGE
+  SESSION_STORAGE
+  INDEXED_DB
+  SCRIPT
+  IFRAME
+  PIXEL
+  NETWORK_REQUEST
+  SERVICE_WORKER
+
+  @@map("scan_finding_type")
+}
+
+enum ScanConsentState {
+  BEFORE_CONSENT
+  AFTER_ACCEPT
+  AFTER_REJECT
+
+  @@map("scan_consent_state")
+}
+
+model DomainScan {
+  id              String     @id @default(uuid()) @db.Uuid
+  domainId        String     @map("domain_id") @db.Uuid
+  organizationId  String     @map("organization_id") @db.Uuid
+  status          ScanStatus @default(PENDING)
+  startUrl        String     @map("start_url")
+  maxPages        Int        @default(25) @map("max_pages")
+  maxDepth        Int        @default(2) @map("max_depth")
+  includePaths    Json?      @map("include_paths")
+  excludePaths    Json?      @map("exclude_paths")
+  timeoutMs       Int        @default(30000) @map("timeout_ms")
+  jsRendering     Boolean    @default(true) @map("js_rendering")
+  deviceType      String     @default("desktop") @map("device_type")
+  pagesScanned    Int        @default(0) @map("pages_scanned")
+  cookiesFound    Int        @default(0) @map("cookies_found")
+  trackersFound   Int        @default(0) @map("trackers_found")
+  errorMessage    String?    @map("error_message")
+  startedAt       DateTime?  @map("started_at")
+  completedAt     DateTime?  @map("completed_at")
+  durationMs      Int?       @map("duration_ms")
+  createdByUserId String?    @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  domain   Domain              @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  pages    DomainScanPage[]
+  findings DomainScanFinding[]
+
+  @@index([domainId, createdAt])
+  @@index([organizationId, createdAt])
+  @@map("domain_scans")
+}
+
+model DomainScanPage {
+  id           String   @id @default(uuid()) @db.Uuid
+  scanId       String   @map("scan_id") @db.Uuid
+  url          String
+  canonicalUrl String?  @map("canonical_url")
+  status       String   @default("ok")
+  depth        Int      @default(0)
+  errorMessage String?  @map("error_message")
+  scannedAt    DateTime @default(now()) @map("scanned_at")
+
+  scan     DomainScan          @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  findings DomainScanFinding[]
+
+  @@index([scanId])
+  @@map("domain_scan_pages")
+}
+
+model DomainScanFinding {
+  id            String           @id @default(uuid()) @db.Uuid
+  scanId        String           @map("scan_id") @db.Uuid
+  pageId        String?          @map("page_id") @db.Uuid
+  findingType   ScanFindingType  @map("finding_type")
+  consentState  ScanConsentState @default(BEFORE_CONSENT) @map("consent_state")
+  name          String
+  valueSample   String?          @map("value_sample")
+  cookieDomain  String?          @map("cookie_domain")
+  cookiePath    String?          @map("cookie_path")
+  expiresAt     DateTime?        @map("expires_at")
+  secure        Boolean?
+  httpOnly      Boolean?         @map("http_only")
+  sameSite      String?          @map("same_site")
+  isThirdParty  Boolean?         @map("is_third_party")
+  pageUrl       String?          @map("page_url")
+  technology    String?
+  sourceUrl     String?          @map("source_url")
+  metadata      Json?
+
+  scan DomainScan      @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  page DomainScanPage? @relation(fields: [pageId], references: [id], onDelete: SetNull)
+
+  @@index([scanId, findingType])
+  @@map("domain_scan_findings")
+}
+
+enum CookieReviewStatus {
+  PENDING
+  AUTO_MATCHED
+  APPROVED
+  REJECTED
+
+  @@map("cookie_review_status")
+}
+
+enum CookieMatchMethod {
+  EXACT
+  PREFIX
+  SUFFIX
+  REGEX
+  PROVIDER_DOMAIN
+  SCRIPT_SOURCE
+  NETWORK_ENDPOINT
+  VENDOR_SIGNATURE
+  MANUAL
+
+  @@map("cookie_match_method")
+}
+
+enum CookieRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+
+  @@map("cookie_risk_level")
+}
+
+model CookieDefinition {
+  id               String          @id @default(uuid()) @db.Uuid
+  organizationId   String?         @map("organization_id") @db.Uuid
+  cookieName       String          @map("cookie_name")
+  provider         String
+  providerDomain   String?         @map("provider_domain")
+  description      String?
+  purpose          String?
+  category         String
+  duration         String?
+  dataCollected    String?         @map("data_collected")
+  isThirdParty     Boolean         @default(false) @map("is_third_party")
+  privacyPolicyUrl String?         @map("privacy_policy_url")
+  riskLevel        CookieRiskLevel @default(MEDIUM) @map("risk_level")
+  aliases          Json?
+  detectionPatterns Json           @map("detection_patterns")
+  isSystem         Boolean         @default(true) @map("is_system")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  domainCookies DomainCookie[]
+
+  @@index([organizationId])
+  @@index([cookieName])
+  @@map("cookie_definitions")
+}
+
+model DomainCookie {
+  id                 String              @id @default(uuid()) @db.Uuid
+  domainId           String              @map("domain_id") @db.Uuid
+  organizationId     String              @map("organization_id") @db.Uuid
+  cookieKey          String              @map("cookie_key")
+  cookieName         String              @map("cookie_name")
+  cookieDomain       String?             @map("cookie_domain")
+  provider           String?
+  providerDomain     String?
+  description        String?
+  purpose            String?
+  category           String?
+  duration           String?
+  dataCollected      String?             @map("data_collected")
+  isThirdParty       Boolean?            @map("is_third_party")
+  privacyPolicyUrl   String?             @map("privacy_policy_url")
+  riskLevel          CookieRiskLevel?    @map("risk_level")
+  cookieDefinitionId String?             @map("cookie_definition_id") @db.Uuid
+  matchMethod        CookieMatchMethod?  @map("match_method")
+  matchConfidence    Int?                @map("match_confidence")
+  reviewStatus       CookieReviewStatus  @default(PENDING) @map("review_status")
+  firstSeenAt        DateTime            @map("first_seen_at")
+  lastSeenAt         DateTime            @map("last_seen_at")
+  lastScanId         String?             @map("last_scan_id") @db.Uuid
+  seenCount          Int                 @default(1) @map("seen_count")
+  expiresAt          DateTime?           @map("expires_at")
+  foundBeforeConsent Boolean             @default(false) @map("found_before_consent")
+  sourceUrl          String?             @map("source_url")
+  metadata           Json?
+  reviewedByUserId   String?             @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt         DateTime?           @map("reviewed_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  domain           Domain            @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  cookieDefinition CookieDefinition? @relation(fields: [cookieDefinitionId], references: [id], onDelete: SetNull)
+
+  @@unique([domainId, cookieKey])
+  @@index([domainId, reviewStatus])
+  @@index([organizationId])
+  @@map("domain_cookies")
+}
+
+model BlockingViolation {
+  id             String   @id @default(uuid()) @db.Uuid
+  domainId       String   @map("domain_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  url            String
+  resourceType   String   @map("resource_type")
+  category       String?
+  vendor         String?
+  rulePattern    String?  @map("rule_pattern")
+  pageUrl        String?  @map("page_url")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId, createdAt])
+  @@map("blocking_violations")
+}
+
+enum NotificationSeverity {
+  INFO
+  WARNING
+  ERROR
+
+  @@map("notification_severity")
+}
+
+model Notification {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @map("organization_id") @db.Uuid
+  domainId       String?              @map("domain_id") @db.Uuid
+  type           String
+  title          String
+  message        String
+  severity       NotificationSeverity @default(INFO)
+  readAt         DateTime?            @map("read_at")
+  metadata       Json?
+  createdAt      DateTime             @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  domain       Domain?      @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, readAt])
+  @@map("notifications")
+}
+
+enum ReportScheduleFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+
+  @@map("report_schedule_frequency")
+}
+
+enum ReportType {
+  COMPLIANCE
+  SCAN_SUMMARY
+  CONSENT_EXPORT
+
+  @@map("report_type")
+}
+
+model ReportSchedule {
+  id              String                  @id @default(uuid()) @db.Uuid
+  organizationId  String                  @map("organization_id") @db.Uuid
+  domainId        String?                 @map("domain_id") @db.Uuid
+  reportType      ReportType              @map("report_type")
+  frequency       ReportScheduleFrequency
+  deliveryEmail   String?                 @map("delivery_email")
+  deliveryWebhook String?                 @map("delivery_webhook")
+  enabled         Boolean                 @default(true)
+  lastRunAt       DateTime?               @map("last_run_at")
+  nextRunAt       DateTime?               @map("next_run_at")
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  runs           ReportRun[]
+
+  @@index([organizationId])
+  @@map("report_schedules")
+}
+
+enum ReportRunStatus {
+  COMPLETED
+  FAILED
+
+  @@map("report_run_status")
+}
+
+model ReportRun {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  scheduleId     String?         @map("schedule_id") @db.Uuid
+  reportType     ReportType      @map("report_type")
+  status         ReportRunStatus
+  resultSummary  Json?           @map("result_summary")
+  deliveredTo    String?         @map("delivered_to")
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  schedule ReportSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@map("report_runs")
+}
+
+enum ApiKeyEnvironment {
+  PRODUCTION
+  SANDBOX
+
+  @@map("api_key_environment")
+}
+
+model ApiKey {
+  id              String            @id @default(uuid()) @db.Uuid
+  organizationId  String            @map("organization_id") @db.Uuid
+  name            String
+  keyPrefix       String            @map("key_prefix")
+  keyHash         String            @unique @map("key_hash")
+  scopes          Json
+  environment     ApiKeyEnvironment @default(PRODUCTION)
+  lastUsedAt      DateTime?         @map("last_used_at")
+  expiresAt       DateTime?         @map("expires_at")
+  revokedAt       DateTime?         @map("revoked_at")
+  createdByUserId String?           @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("api_keys")
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+
+  @@map("webhook_delivery_status")
+}
+
+model WebhookEndpoint {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  url            String
+  secret         String
+  secretPrefix   String   @map("secret_prefix")
+  events         Json
+  enabled        Boolean  @default(true)
+  description    String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries   WebhookDelivery[]
+
+  @@index([organizationId, createdAt])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id                String                @id @default(uuid()) @db.Uuid
+  webhookEndpointId String                @map("webhook_endpoint_id") @db.Uuid
+  organizationId    String                @map("organization_id") @db.Uuid
+  eventType         String                @map("event_type")
+  payload           Json
+  status            WebhookDeliveryStatus @default(PENDING)
+  attemptCount      Int                   @default(0) @map("attempt_count")
+  lastAttemptAt     DateTime?             @map("last_attempt_at")
+  nextRetryAt       DateTime?             @map("next_retry_at")
+  responseStatus    Int?                  @map("response_status")
+  responseBody      String?               @map("response_body")
+  errorMessage      String?               @map("error_message")
+  deliveredAt       DateTime?             @map("delivered_at")
+  createdAt         DateTime              @default(now()) @map("created_at")
+
+  endpoint WebhookEndpoint @relation(fields: [webhookEndpointId], references: [id], onDelete: Cascade)
+
+  @@index([webhookEndpointId, createdAt])
+  @@index([organizationId, createdAt])
+  @@map("webhook_deliveries")
+}
+
+model ApiIdempotencyKey {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  apiKeyId       String?  @map("api_key_id") @db.Uuid
+  idempotencyKey String   @map("idempotency_key")
+  method         String
+  path           String
+  statusCode     Int      @map("status_code")
+  responseBody   Json     @map("response_body")
+  createdAt      DateTime @default(now()) @map("created_at")
+  expiresAt      DateTime @map("expires_at")
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([expiresAt])
+  @@map("api_idempotency_keys")
+}
+
+model DomainGroup {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  name              String
+  slug              String
+  shareConsent      Boolean  @default(true) @map("share_consent")
+  consentSyncSecret String   @map("consent_sync_secret")
+  parentDomainId    String?  @map("parent_domain_id") @db.Uuid
+  allowedHostnames  String[] @default([]) @map("allowed_hostnames")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members      DomainGroupMember[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@map("domain_groups")
+}
+
+model DomainGroupMember {
+  groupId  String @map("group_id") @db.Uuid
+  domainId String @map("domain_id") @db.Uuid
+  role     String @default("member")
+
+  group  DomainGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  domain Domain      @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, domainId])
+  @@index([domainId])
+  @@map("domain_group_members")
+}
+
+model OrganizationCustomRole {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  slug           String
+  name           String
+  description    String?
+  permissions    String[]
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignments  UserCustomRole[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@map("organization_custom_roles")
+}
+
+model UserCustomRole {
+  userId      String   @map("user_id") @db.Uuid
+  customRoleId String @map("custom_role_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  customRole OrganizationCustomRole @relation(fields: [customRoleId], references: [id], onDelete: Cascade)
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, customRoleId])
+  @@map("user_custom_roles")
+}
+
+model UserDomainAccess {
+  userId      String   @map("user_id") @db.Uuid
+  domainId    String   @map("domain_id") @db.Uuid
+  permissions String[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, domainId])
+  @@index([domainId])
+  @@map("user_domain_access")
+}
+
+enum AiSuggestionType {
+  COOKIE_CLASSIFICATION
+  COOKIE_DESCRIPTION
+  COMPLIANCE_RECOMMENDATION
+  BANNER_TEXT
+  MISCLASSIFIED_NECESSARY
+
+  @@map("ai_suggestion_type")
+}
+
+enum AiSuggestionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  APPLIED
+
+  @@map("ai_suggestion_status")
+}
+
+model AiSuggestion {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  domainId       String             @map("domain_id") @db.Uuid
+  suggestionType AiSuggestionType   @map("suggestion_type")
+  status         AiSuggestionStatus @default(PENDING)
+  targetType     String             @map("target_type")
+  targetId       String?            @map("target_id") @db.Uuid
+  confidence     Float?
+  suggestion     Json
+  evidence       Json?
+  createdBy      String?            @map("created_by")
+  decidedBy      String?            @map("decided_by") @db.Uuid
+  decidedAt      DateTime?          @map("decided_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId, status])
+  @@index([organizationId, createdAt])
+  @@map("ai_suggestions")
+}
+
+model RegressionTestRun {
+  id             String                @id @default(uuid()) @db.Uuid
+  organizationId String                @map("organization_id") @db.Uuid
+  domainId       String                @map("domain_id") @db.Uuid
+  overallStatus  ValidationCheckStatus @map("overall_status")
+  scenarios      Json
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId, createdAt])
+  @@map("regression_test_runs")
 }

@@ -3,7 +3,7 @@ import { isAuth0Configured } from '@cmp/auth';
 
 export default function HomePage() {
   if (isAuth0Configured()) {
-    redirect('/domains');
+    redirect('/dashboard');
   }
 
   return (

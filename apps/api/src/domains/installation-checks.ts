@@ -11,10 +11,16 @@ export interface SdkHeartbeatPayload {
   consentEventDetected?: boolean;
   autoBlockingEnabled?: boolean;
   googleConsentModeDetected?: boolean;
+  googleConsentModeEnabled?: boolean;
+  googleConsentModeDefaultApplied?: boolean;
+  googleConsentModeUpdateApplied?: boolean;
+  googleConsentModeMode?: 'basic' | 'advanced';
   duplicateScripts?: number;
   jsErrors?: string[];
   scriptLoadedFirst?: boolean;
   defaultConsentApplied?: boolean;
+  preConsentViolations?: number;
+  integrationSource?: 'wordpress' | 'gtm' | 'manual' | 'shopify' | 'other';
 }
 
 export interface DomainForValidation {
@@ -141,19 +147,45 @@ export function buildInstallationChecks(domain: DomainForValidation): Validation
         : 'Auto-blocking is disabled on this domain',
     },
     {
-      id: 'google_consent_mode',
-      label: 'Google Consent Mode',
+      id: 'pre_consent_violations',
+      label: 'Pre-consent blocking violations',
       status: !hasHeartbeat
         ? 'FAIL'
-        : heartbeat.googleConsentModeDetected
+        : (heartbeat.preConsentViolations ?? 0) === 0
           ? 'PASS'
           : 'WARNING',
       message: !hasHeartbeat
         ? 'CMP script has not reported installation'
-        : heartbeat.googleConsentModeDetected
-          ? 'Google Consent Mode detected'
-          : 'Google Consent Mode not detected (full integration ships in Sprint 11)',
-      remediation: 'Enable Google Consent Mode when integrating analytics in a later sprint',
+        : (heartbeat.preConsentViolations ?? 0) === 0
+          ? 'No pre-consent tracker violations detected'
+          : `${heartbeat.preConsentViolations} resource(s) blocked before consent`,
+      remediation: 'Review blocking debugger output and remove or defer non-essential tags until consent',
+    },
+    {
+      id: 'google_consent_mode',
+      label: 'Google Consent Mode',
+      status: !hasHeartbeat
+        ? 'FAIL'
+        : heartbeat.googleConsentModeEnabled === false
+          ? 'PASS'
+          : heartbeat.googleConsentModeDefaultApplied && heartbeat.googleConsentModeDetected
+            ? heartbeat.googleConsentModeUpdateApplied
+              ? 'PASS'
+              : 'WARNING'
+            : 'FAIL',
+      message: !hasHeartbeat
+        ? 'CMP script has not reported installation'
+        : heartbeat.googleConsentModeEnabled === false
+          ? 'Google Consent Mode is disabled in policy'
+          : heartbeat.googleConsentModeDefaultApplied && heartbeat.googleConsentModeDetected
+            ? heartbeat.googleConsentModeUpdateApplied
+              ? `Consent Mode v2 active (${heartbeat.googleConsentModeMode ?? 'advanced'}): default and update applied`
+              : `Consent Mode v2 default applied (${heartbeat.googleConsentModeMode ?? 'advanced'}); awaiting visitor consent update`
+            : 'Google Consent Mode default was not applied before tags — place CMP snippet before GTM/gtag',
+      remediation:
+        heartbeat.googleConsentModeEnabled === false
+          ? undefined
+          : 'Enable Google Consent Mode in policy settings and load the CMP script before Google tags',
     },
     {
       id: 'duplicate_scripts',
@@ -184,6 +216,21 @@ export function buildInstallationChecks(domain: DomainForValidation): Validation
           ? 'No JavaScript errors reported by the SDK'
           : `${heartbeat.jsErrors!.length} JavaScript error(s) reported`,
       remediation: 'Fix JavaScript errors on your site and reload',
+    },
+    {
+      id: 'integration_source',
+      label: 'Integration source',
+      status: !hasHeartbeat
+        ? 'FAIL'
+        : heartbeat.integrationSource
+          ? 'PASS'
+          : 'WARNING',
+      message: !hasHeartbeat
+        ? 'CMP script has not reported installation'
+        : heartbeat.integrationSource
+          ? `Integration reported: ${heartbeat.integrationSource}`
+          : 'No integration source reported (manual snippet install)',
+      remediation: 'Use the WordPress plugin, GTM template, or add data-integration on the script tag',
     },
   ];
 

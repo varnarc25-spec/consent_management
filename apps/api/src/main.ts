@@ -61,8 +61,10 @@ async function bootstrap() {
 
   const swagger = new DocumentBuilder()
     .setTitle('Consent Management Platform API')
-    .setVersion('0.1.0')
+    .setDescription('Admin JWT API and Developer API key endpoints under /developer/v1')
+    .setVersion('1.0.0')
     .addBearerAuth()
+    .addApiKey({ type: 'apiKey', name: 'Authorization', in: 'header' }, 'api-key')
     .build();
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, swagger));
 

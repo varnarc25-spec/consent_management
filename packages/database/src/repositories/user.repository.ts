@@ -8,6 +8,7 @@ export class UserRepository {
       where: { email: email.toLowerCase() },
       include: {
         roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
+        customRoles: { include: { customRole: true } },
         organization: true,
       },
     });
@@ -18,6 +19,7 @@ export class UserRepository {
       where: { auth0Sub },
       include: {
         roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
+        customRoles: { include: { customRole: true } },
         organization: true,
       },
     });
@@ -28,6 +30,7 @@ export class UserRepository {
       where: { id },
       include: {
         roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
+        customRoles: { include: { customRole: true } },
         organization: true,
       },
     });

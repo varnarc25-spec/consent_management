@@ -12,7 +12,10 @@ interface Organization {
   legalName?: string | null;
   country?: string | null;
   timezone?: string | null;
+  defaultRegulation?: string | null;
   billingEmail?: string | null;
+  storeConsentIpAddress?: boolean;
+  geoTargetingDisabled?: boolean;
   status: string;
 }
 
@@ -59,6 +62,9 @@ export default function OrganizationPage() {
         country: form.get('country') || undefined,
         timezone: form.get('timezone') || undefined,
         billingEmail: form.get('billingEmail') || undefined,
+        defaultRegulation: form.get('defaultRegulation') || undefined,
+        storeConsentIpAddress: form.get('storeConsentIpAddress') === 'on',
+        geoTargetingDisabled: form.get('geoTargetingDisabled') === 'on',
       }),
     });
     if (result.ok && result.data) {
@@ -138,6 +144,9 @@ export default function OrganizationPage() {
           {org.country && <p>Country: {org.country}</p>}
           {org.timezone && <p>Timezone: {org.timezone}</p>}
           {org.billingEmail && <p>Billing: {org.billingEmail}</p>}
+          <p>Store consent IP (hashed): {org.storeConsentIpAddress ? 'Yes' : 'No'}</p>
+          {org.defaultRegulation && <p>Default regulation: {org.defaultRegulation}</p>}
+          <p>Server geo targeting: {org.geoTargetingDisabled ? 'Disabled' : 'Enabled'}</p>
           <button className="btn" style={{ marginTop: '1rem' }} onClick={() => setEditing(true)}>
             Edit organization
           </button>
@@ -162,6 +171,16 @@ export default function OrganizationPage() {
             <input id="timezone" name="timezone" defaultValue={org.timezone ?? ''} />
           </div>
           <div className="field">
+            <label htmlFor="defaultRegulation">Default regulation</label>
+            <select id="defaultRegulation" name="defaultRegulation" defaultValue={org.defaultRegulation ?? 'GDPR'}>
+              <option value="GDPR">GDPR</option>
+              <option value="CCPA">CCPA</option>
+              <option value="LGPD">LGPD</option>
+              <option value="PIPEDA">PIPEDA</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </div>
+          <div className="field">
             <label htmlFor="billingEmail">Billing email</label>
             <input
               id="billingEmail"
@@ -169,6 +188,26 @@ export default function OrganizationPage() {
               type="email"
               defaultValue={org.billingEmail ?? ''}
             />
+          </div>
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                name="geoTargetingDisabled"
+                defaultChecked={org.geoTargetingDisabled ?? false}
+              />
+              Disable server-side geo detection (use client hints only)
+            </label>
+          </div>
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                name="storeConsentIpAddress"
+                defaultChecked={org.storeConsentIpAddress ?? true}
+              />
+              Store hashed IP address on consent records
+            </label>
           </div>
           <div style={{ display: 'flex', gap: '1rem' }}>
             <button className="btn" type="submit">Save</button>

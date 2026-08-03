@@ -15,6 +15,7 @@ interface Domain {
   verificationMethod: string | null;
   verificationToken: string;
   environment: string;
+  region: string | null;
   autoBlocking: boolean;
   debugMode: boolean;
   enabled: boolean;
@@ -53,6 +54,7 @@ export default function DomainDetailPage() {
   const [guide, setGuide] = useState('html');
   const [settings, setSettings] = useState({
     enabled: true,
+    region: '',
     groupName: '',
     scanLimit: 10,
     autoBlocking: true,
@@ -65,6 +67,7 @@ export default function DomainDetailPage() {
         setDomain(r.data);
         setSettings({
           enabled: r.data.enabled,
+          region: r.data.region ?? '',
           groupName: r.data.groupName ?? '',
           scanLimit: r.data.scanLimit,
           autoBlocking: r.data.autoBlocking,
@@ -124,6 +127,7 @@ export default function DomainDetailPage() {
       method: 'PATCH',
       body: JSON.stringify({
         enabled: settings.enabled,
+        region: settings.region || undefined,
         groupName: settings.groupName || undefined,
         scanLimit: settings.scanLimit,
         autoBlocking: settings.autoBlocking,
@@ -155,7 +159,7 @@ export default function DomainDetailPage() {
 
   return (
     <ProtectedLayout>
-      <p><Link href="/domains">← Back to domains</Link> · <Link href={`/domains/${id}/consent`}>Consent configuration</Link> · <Link href={`/domains/${id}/test-banner`}>Test banner</Link></p>
+      <p><Link href="/domains">← Back to domains</Link> · <Link href={`/domains/${id}/consent`}>Consent configuration</Link> · <Link href={`/domains/${id}/install`}>Installation wizard</Link> · <Link href={`/domains/${id}/ai`}>AI assistant</Link> · <Link href={`/domains/${id}/scans`}>Website scans</Link> · <Link href={`/domains/${id}/cookies`}>Cookie repository</Link> · <Link href={`/domains/${id}/blocking`}>Blocking</Link> · <Link href={`/domains/${id}/test-banner`}>Test banner</Link></p>
       <h1>{domain.hostname}</h1>
       <p style={{ color: 'var(--muted)' }}>
         Key: <code>{domain.domainKey}</code> · Verification: {domain.verificationStatus}
@@ -191,6 +195,18 @@ export default function DomainDetailPage() {
               onChange={(e) => setSettings({ ...settings, groupName: e.target.value })}
               placeholder="e.g. Marketing sites"
             />
+          </div>
+          <div className="field">
+            <label htmlFor="region">Default region label</label>
+            <input
+              id="region"
+              value={settings.region}
+              onChange={(e) => setSettings({ ...settings, region: e.target.value })}
+              placeholder="e.g. EU, US, GLOBAL"
+            />
+            <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
+              Fallback when geo detection is unavailable. Not a substitute for regional rules.
+            </p>
           </div>
           <div className="field">
             <label htmlFor="scanLimit">Scan limit</label>

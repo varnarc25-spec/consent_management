@@ -57,6 +57,12 @@ export class OrganizationRepository {
     return this.prisma.organization.update({ where: { id }, data });
   }
 
+  listActive() {
+    return this.prisma.organization.findMany({
+      where: { deletedAt: null, status: 'ACTIVE' },
+    });
+  }
+
   softDelete(id: string) {
     return this.prisma.organization.update({
       where: { id },

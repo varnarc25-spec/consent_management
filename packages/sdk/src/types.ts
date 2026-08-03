@@ -22,6 +22,7 @@ export interface BannerBehavior {
   rememberChoice?: boolean;
   consentExpirationDays?: number;
   allowClose?: boolean;
+  clearCookiesOnWithdrawal?: boolean;
 }
 
 export interface BannerTheme {
@@ -68,6 +69,27 @@ export interface BannerContent {
   behavior?: BannerBehavior;
   theme?: BannerTheme;
   privacyTrigger?: PrivacyTriggerConfig;
+  embedPlaceholders?: Record<string, { title?: string; description?: string; allowLabel?: string }>;
+  translations?: Record<
+    string,
+    {
+      title?: string;
+      description?: string;
+      acceptButton?: string;
+      rejectButton?: string;
+      preferencesButton?: string;
+      saveButton?: string;
+      closeButton?: string;
+      legalNotice?: string;
+      footerContent?: string;
+      privacyPolicyUrl?: string;
+      cookiePolicyUrl?: string;
+      categoryDescriptions?: Record<string, string>;
+      categoryNames?: Record<string, string>;
+      vendorDescriptions?: Record<string, string>;
+      privacyTrigger?: { label?: string };
+    }
+  >;
 }
 
 export interface CategorySnapshot {
@@ -78,17 +100,89 @@ export interface CategorySnapshot {
   enabled?: boolean;
   defaultState?: string;
   vendorPurposes?: string[] | null;
+  scriptMappings?: {
+    scripts?: string[];
+    iframes?: string[];
+    pixels?: string[];
+    cookies?: string[];
+  } | null;
+}
+
+export interface ConsentMetadata {
+  savedAt: string | null;
+  expiresAt: string | null;
+  policyVersionId: string | null;
+  policyVersionNumber: number | null;
+  region: string | null;
+  language: string | null;
 }
 
 export interface CmpConfig {
   domainKey: string;
+  hostname?: string;
   configVersion: number;
   policyVersionId?: string | null;
   policyVersionNumber?: number | null;
+  consentMetadata?: ConsentMetadata | null;
   region?: string | null;
+  visitorGeo?: {
+    country: string | null;
+    region: string | null;
+    language: string;
+    timezone: string | null;
+    source: string;
+  } | null;
+  applicableRegulation?: string | null;
+  regulationProfileId?: string | null;
+  matchedRegionalRuleId?: string | null;
+  autoBlocking?: boolean;
+  debugMode?: boolean;
+  vendorPatterns?: Array<{
+    vendor: string;
+    category: string;
+    patterns: string[];
+    resourceTypes?: string[];
+  }>;
+  shareVisitorAcrossSubdomains?: boolean;
+  visitorCookieDomain?: string | null;
   requiresRenewal?: boolean;
+  regulationConfig?: {
+    googleConsentMode?: {
+      enabled?: boolean;
+      mode?: 'basic' | 'advanced';
+      adsDataRedaction?: boolean;
+      urlPassthrough?: boolean;
+      waitForUpdate?: number;
+      regionDefaults?: Record<string, Record<string, 'granted' | 'denied'>>;
+    };
+    geo?: {
+      enabled?: boolean;
+      defaultProfileId?: string;
+      regionalRules?: Array<{
+        id: string;
+        name: string;
+        priority: number;
+        conditions: Record<string, unknown>;
+        profileId: string;
+      }>;
+    };
+  } | null;
   categories?: CategorySnapshot[];
   banner?: BannerContent | null;
+  supportedLanguages?: string[];
+  defaultLanguage?: string;
+  activeLanguage?: string;
+  crossDomainGroup?: {
+    groupId: string;
+    shareConsent: boolean;
+    memberDomainKeys: string[];
+  } | null;
+  whiteLabel?: {
+    logoUrl?: string | null;
+    primaryColor?: string | null;
+    cmpBrandName?: string | null;
+    hidePlatformBranding?: boolean;
+  } | null;
 }
 
 export function normalizePath(pathname: string) {

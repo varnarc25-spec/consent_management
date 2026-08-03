@@ -1,5 +1,6 @@
 import { PERMISSIONS, ROLE_DEFINITIONS } from '@cmp/auth';
 import { prisma } from './index';
+import { MASTER_COOKIE_DEFINITIONS } from './constants/master-cookies';
 
 const PERMISSION_META: Record<string, { name: string; module: string }> = {
   [PERMISSIONS.ORGANIZATION_MANAGE]: { name: 'Manage organization', module: 'organization' },
@@ -45,6 +46,54 @@ async function main() {
   }
 
   console.log('Seeded roles and permissions');
+
+  for (const cookie of MASTER_COOKIE_DEFINITIONS) {
+    const existing = await prisma.cookieDefinition.findFirst({
+      where: { organizationId: null, cookieName: cookie.cookieName, provider: cookie.provider },
+    });
+
+    if (existing) {
+      await prisma.cookieDefinition.update({
+        where: { id: existing.id },
+        data: {
+          providerDomain: cookie.providerDomain,
+          description: cookie.description,
+          purpose: cookie.purpose,
+          category: cookie.category,
+          duration: cookie.duration,
+          dataCollected: cookie.dataCollected,
+          isThirdParty: cookie.isThirdParty,
+          privacyPolicyUrl: cookie.privacyPolicyUrl,
+          riskLevel: cookie.riskLevel,
+          aliases: cookie.aliases ?? undefined,
+          detectionPatterns: cookie.detectionPatterns as object,
+          isSystem: true,
+        },
+      });
+    } else {
+      await prisma.cookieDefinition.create({
+        data: {
+          organizationId: null,
+          cookieName: cookie.cookieName,
+          provider: cookie.provider,
+          providerDomain: cookie.providerDomain,
+          description: cookie.description,
+          purpose: cookie.purpose,
+          category: cookie.category,
+          duration: cookie.duration,
+          dataCollected: cookie.dataCollected,
+          isThirdParty: cookie.isThirdParty,
+          privacyPolicyUrl: cookie.privacyPolicyUrl,
+          riskLevel: cookie.riskLevel,
+          aliases: cookie.aliases ?? undefined,
+          detectionPatterns: cookie.detectionPatterns as object,
+          isSystem: true,
+        },
+      });
+    }
+  }
+
+  console.log(`Seeded ${MASTER_COOKIE_DEFINITIONS.length} master cookie definitions`);
 }
 
 main()

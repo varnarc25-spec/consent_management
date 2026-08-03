@@ -7,6 +7,22 @@ import { BannerPreview } from '@/components/banner-preview';
 import { ProtectedLayout } from '@/components/protected-layout';
 import { apiFetch } from '@/lib/api';
 import { BANNER_TEXT_TEMPLATES } from '@cmp/utils';
+import {
+  DEFAULT_REGIONAL_RULES,
+  listRegulationProfiles,
+  applyRegulationProfile,
+  resolveGeoRegulation,
+  type RegionalRule,
+} from '@cmp/utils';
+import {
+  COMMON_LANGUAGE_OPTIONS,
+  applyBannerTranslation,
+  getBannerContrastWarnings,
+  isRtlLanguage,
+  listMissingBannerTranslations,
+  listMissingCategoryTranslations,
+  type BannerTranslationEntry,
+} from '@cmp/utils';
 
 interface Category {
   id: string;
@@ -20,6 +36,11 @@ interface Category {
   isSystem: boolean;
   sortOrder: number;
   vendorPurposes?: string[] | null;
+  scriptMappings?: {
+    scripts?: string[];
+    iframes?: string[];
+    pixels?: string[];
+  } | null;
 }
 
 interface BannerState {
@@ -76,6 +97,16 @@ interface BannerState {
     position: 'bottom-left' | 'bottom-right';
     footerSelector: string;
   };
+  embedPlaceholders: Record<string, { title: string; description: string; allowLabel: string }>;
+  translations?: Record<string, BannerTranslationEntry>;
+}
+
+interface GoogleConsentModeConfig {
+  enabled: boolean;
+  mode: 'basic' | 'advanced';
+  adsDataRedaction: boolean;
+  urlPassthrough: boolean;
+  waitForUpdate: number;
 }
 
 interface Policy {
@@ -83,10 +114,16 @@ interface Policy {
   versionNumber: number;
   status: string;
   bannerContent: Partial<BannerState> | null;
+  regulationConfig?: {
+    googleConsentMode?: Partial<GoogleConsentModeConfig>;
+    geo?: Partial<GeoRegulationSettings>;
+  } | null;
   changeSummary: string | null;
   publishedAt: string | null;
   scheduledAt: string | null;
   requiresRenewal: boolean;
+  supportedLanguages?: string[] | null;
+  legalText?: { defaultLanguage?: string } | null;
 }
 
 interface Renewal {
@@ -96,7 +133,43 @@ interface Renewal {
   createdAt: string;
 }
 
-type Tab = 'categories' | 'banner' | 'policy' | 'renewals';
+type Tab = 'categories' | 'banner' | 'languages' | 'policy' | 'regional' | 'renewals';
+
+interface GeoRegulationSettings {
+  enabled: boolean;
+  defaultProfileId: string;
+  regionalRules: RegionalRule[];
+}
+
+const REGULATION_PROFILE_OPTIONS = listRegulationProfiles();
+
+function mergeGeoSettings(config?: GeoRegulationSettings | null): GeoRegulationSettings {
+  return {
+    enabled: config?.enabled ?? true,
+    defaultProfileId: config?.defaultProfileId ?? 'generic_opt_in',
+    regionalRules: config?.regionalRules ?? DEFAULT_REGIONAL_RULES,
+  };
+}
+
+const defaultGoogleConsentMode = (): GoogleConsentModeConfig => ({
+  enabled: true,
+  mode: 'advanced',
+  adsDataRedaction: false,
+  urlPassthrough: false,
+  waitForUpdate: 500,
+});
+
+function mergeGoogleConsentMode(
+  config?: Partial<GoogleConsentModeConfig> | null,
+): GoogleConsentModeConfig {
+  const base = defaultGoogleConsentMode();
+  if (!config) return base;
+  return {
+    ...base,
+    ...config,
+    waitForUpdate: config.waitForUpdate ?? base.waitForUpdate,
+  };
+}
 
 const defaultBanner = (): BannerState => ({
   title: 'We value your privacy',
@@ -153,11 +226,32 @@ const defaultBanner = (): BannerState => ({
     position: 'bottom-right',
     footerSelector: '',
   },
+  embedPlaceholders: {},
+  translations: {},
 });
 
 function parsePageList(value: string[] | string | undefined): string {
   if (Array.isArray(value)) return value.join(', ');
   return value ?? '';
+}
+
+function splitMappingList(values?: string[]) {
+  return (values ?? []).join(', ');
+}
+
+function parseMappingList(value: string) {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function mappingsToFields(mappings?: Category['scriptMappings']) {
+  return {
+    scripts: splitMappingList(mappings?.scripts),
+    iframes: splitMappingList(mappings?.iframes),
+    pixels: splitMappingList(mappings?.pixels),
+  };
 }
 
 function mergeBanner(content?: Partial<BannerState> | null): BannerState {
@@ -173,6 +267,7 @@ function mergeBanner(content?: Partial<BannerState> | null): BannerState {
     ...content,
     categoryDescriptions: { ...base.categoryDescriptions, ...(content.categoryDescriptions ?? {}) },
     vendorDescriptions: { ...base.vendorDescriptions, ...(content.vendorDescriptions ?? {}) },
+    embedPlaceholders: { ...base.embedPlaceholders, ...(content.embedPlaceholders ?? {}) },
     behavior: {
       ...base.behavior,
       ...(content.behavior ?? {}),
@@ -181,6 +276,7 @@ function mergeBanner(content?: Partial<BannerState> | null): BannerState {
     },
     theme: { ...base.theme, ...(content.theme ?? {}) },
     privacyTrigger: { ...base.privacyTrigger, ...(content.privacyTrigger ?? {}) },
+    translations: { ...base.translations, ...(content.translations ?? {}) },
   };
 }
 
@@ -211,11 +307,22 @@ export default function DomainConsentPage() {
   const [error, setError] = useState('');
   const [publishing, setPublishing] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [geoSettings, setGeoSettings] = useState<GeoRegulationSettings>(mergeGeoSettings());
+  const [googleConsentMode, setGoogleConsentMode] = useState<GoogleConsentModeConfig>(defaultGoogleConsentMode());
+  const [previewCountry, setPreviewCountry] = useState('DE');
   const [banner, setBanner] = useState<BannerState>(defaultBanner());
   const [previewViewport, setPreviewViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [scheduleAt, setScheduleAt] = useState('');
   const [renewalReason, setRenewalReason] = useState('admin_requested');
   const [textTemplate, setTextTemplate] = useState('');
+  const [supportedLanguages, setSupportedLanguages] = useState<string[]>(['en']);
+  const [defaultLanguage, setDefaultLanguage] = useState('en');
+  const [editingLanguage, setEditingLanguage] = useState('de');
+  const [rtlPreview, setRtlPreview] = useState(false);
+  const [previewLanguage, setPreviewLanguage] = useState('en');
+  const [mappingEdits, setMappingEdits] = useState<
+    Record<string, { scripts: string; iframes: string; pixels: string }>
+  >({});
 
   function applyTextTemplate(templateId: string) {
     const template = BANNER_TEXT_TEMPLATES.find((item) => item.id === templateId);
@@ -241,7 +348,12 @@ export default function DomainConsentPage() {
 
   function loadCategories() {
     apiFetch<Category[]>(`/domains/${domainId}/consent/categories`).then((r) => {
-      if (r.data) setCategories(r.data);
+      if (r.data) {
+        setCategories(r.data);
+        setMappingEdits(
+          Object.fromEntries(r.data.map((category) => [category.id, mappingsToFields(category.scriptMappings)])),
+        );
+      }
     });
   }
 
@@ -253,6 +365,15 @@ export default function DomainConsentPage() {
       if (r.data) {
         setDraft(r.data);
         setBanner(mergeBanner(r.data.bannerContent as Partial<BannerState>));
+        const regulation = r.data.regulationConfig as Policy['regulationConfig'];
+        setGoogleConsentMode(mergeGoogleConsentMode(regulation?.googleConsentMode));
+        setGeoSettings(mergeGeoSettings(regulation?.geo as GeoRegulationSettings | undefined));
+        const langs = (r.data.supportedLanguages as string[] | null) ?? ['en'];
+        setSupportedLanguages(langs);
+        const legal = r.data.legalText as Policy['legalText'];
+        setDefaultLanguage(legal?.defaultLanguage ?? langs[0] ?? 'en');
+        const nonDefault = langs.find((code) => code !== (legal?.defaultLanguage ?? langs[0] ?? 'en'));
+        if (nonDefault) setEditingLanguage(nonDefault);
       }
     });
   }
@@ -298,6 +419,19 @@ export default function DomainConsentPage() {
     }
   }
 
+  async function saveCategoryMappings(category: Category) {
+    const fields = mappingEdits[category.id];
+    if (!fields) return;
+    setError('');
+    await updateCategory(category, {
+      scriptMappings: {
+        scripts: parseMappingList(fields.scripts),
+        iframes: parseMappingList(fields.iframes),
+        pixels: parseMappingList(fields.pixels),
+      },
+    });
+  }
+
   async function moveCategory(index: number, direction: -1 | 1) {
     const nextIndex = index + direction;
     if (nextIndex < 0 || nextIndex >= categories.length) return;
@@ -309,6 +443,198 @@ export default function DomainConsentPage() {
       body: JSON.stringify({ orderedIds: ordered.map((c) => c.id) }),
     });
     if (result.ok) setCategories(result.data ?? ordered);
+  }
+
+  function buildRegulationConfigPatch() {
+    return {
+      regulationConfig: {
+        googleConsentMode: googleConsentMode,
+        geo: geoSettings,
+      },
+    };
+  }
+
+  async function saveGeoSettings() {
+    if (!draft) return;
+    setError('');
+    const result = await apiFetch<Policy>(`/domains/${domainId}/consent/policies/${draft.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(buildRegulationConfigPatch()),
+    });
+    if (result.ok) {
+      setMessage('Regional settings saved');
+      loadPolicies();
+    } else {
+      setError(result.error?.message ?? 'Failed to save regional settings');
+    }
+  }
+
+  function previewBannerForCountry(country: string): BannerState {
+    const resolved = resolveGeoRegulation(
+      { country, region: country, language: 'en' },
+      geoSettings,
+    );
+    const categorySnapshots = categories.map((c) => ({
+      slug: c.slug,
+      defaultState: c.defaultState,
+      enabled: c.enabled,
+    }));
+    const applied = applyRegulationProfile(
+      serializeBanner(banner) as Record<string, unknown>,
+      categorySnapshots,
+      resolved.profile,
+      resolved.matchedRule,
+    );
+    return mergeBanner(applied.banner as Partial<BannerState>);
+  }
+
+  function previewBannerForLanguage(lang: string): BannerState {
+    const geoBanner = previewBannerForCountry(previewCountry);
+    const serialized = {
+      ...serializeBanner(geoBanner),
+      translations: banner.translations,
+    };
+    if (lang === defaultLanguage) return mergeBanner(serialized as unknown as Partial<BannerState>);
+    const localized = applyBannerTranslation(serialized, lang, supportedLanguages);
+    return mergeBanner(localized as unknown as Partial<BannerState>);
+  }
+
+  function toggleSupportedLanguage(code: string) {
+    setSupportedLanguages((current) => {
+      if (current.includes(code)) {
+        const next = current.filter((item) => item !== code);
+        return next.length ? next : ['en'];
+      }
+      return [...current, code].sort();
+    });
+  }
+
+  function updateTranslationField(
+    lang: string,
+    field: keyof BannerTranslationEntry,
+    value: string,
+  ) {
+    setBanner((current) => ({
+      ...current,
+      translations: {
+        ...current.translations,
+        [lang]: {
+          ...current.translations?.[lang],
+          [field]: value,
+        },
+      },
+    }));
+  }
+
+  function updateTranslationCategoryField(
+    lang: string,
+    slug: string,
+    field: 'name' | 'description',
+    value: string,
+  ) {
+    setBanner((current) => {
+      const entry = current.translations?.[lang] ?? {};
+      if (field === 'name') {
+        return {
+          ...current,
+          translations: {
+            ...current.translations,
+            [lang]: {
+              ...entry,
+              categoryNames: { ...entry.categoryNames, [slug]: value },
+            },
+          },
+        };
+      }
+      return {
+        ...current,
+        translations: {
+          ...current.translations,
+          [lang]: {
+            ...entry,
+            categoryDescriptions: { ...entry.categoryDescriptions, [slug]: value },
+          },
+        },
+      };
+    });
+  }
+
+  async function saveLanguages() {
+    if (!draft) return;
+    setError('');
+    const langs = supportedLanguages.includes(defaultLanguage)
+      ? supportedLanguages
+      : [defaultLanguage, ...supportedLanguages];
+    const result = await apiFetch<Policy>(`/domains/${domainId}/consent/policies/${draft.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        supportedLanguages: langs,
+        legalText: { defaultLanguage },
+        bannerContent: serializeBanner(banner),
+      }),
+    });
+    if (result.ok) {
+      setMessage('Language settings saved');
+      loadPolicies();
+    } else {
+      setError(result.error?.message ?? 'Failed to save language settings');
+    }
+  }
+
+  async function suggestTranslations() {
+    if (!draft) return;
+    setError('');
+    const result = await apiFetch<{
+      suggestions: BannerTranslationEntry;
+      disclaimer?: string;
+    }>(`/domains/${domainId}/consent/policies/${draft.id}/translation-suggestions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        targetLanguage: editingLanguage,
+        source: {
+          title: banner.title,
+          description: banner.description,
+          acceptButton: banner.acceptButton,
+          rejectButton: banner.rejectButton,
+          preferencesButton: banner.preferencesButton,
+          saveButton: banner.saveButton,
+          closeButton: banner.closeButton,
+          legalNotice: banner.legalNotice,
+          footerContent: banner.footerContent,
+          privacyTrigger: { label: banner.privacyTrigger.label },
+        },
+      }),
+    });
+    if (result.ok && result.data?.suggestions) {
+      setBanner((current) => ({
+        ...current,
+        translations: {
+          ...current.translations,
+          [editingLanguage]: {
+            ...current.translations?.[editingLanguage],
+            ...result.data!.suggestions,
+          },
+        },
+      }));
+      setMessage(result.data.disclaimer ?? 'Translation suggestions applied — review before publishing');
+    } else {
+      setError(result.error?.message ?? 'Failed to fetch translation suggestions');
+    }
+  }
+
+  async function saveGoogleConsentMode() {
+    if (!draft) return;
+    setError('');
+    const result = await apiFetch<Policy>(`/domains/${domainId}/consent/policies/${draft.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(buildRegulationConfigPatch()),
+    });
+    if (result.ok) {
+      setMessage('Google Consent Mode settings saved');
+      loadPolicies();
+    } else {
+      setError(result.error?.message ?? 'Failed to save Google Consent Mode settings');
+    }
   }
 
   async function saveBanner(e?: FormEvent) {
@@ -386,6 +712,26 @@ export default function DomainConsentPage() {
     }
   }
 
+  const themeContrastWarnings = getBannerContrastWarnings(banner.theme);
+  const editingTranslation = banner.translations?.[editingLanguage];
+  const missingBannerFields = listMissingBannerTranslations(
+    {
+      title: banner.title,
+      description: banner.description,
+      acceptButton: banner.acceptButton,
+      rejectButton: banner.rejectButton,
+      preferencesButton: banner.preferencesButton,
+      saveButton: banner.saveButton,
+      closeButton: banner.closeButton,
+      legalNotice: banner.legalNotice,
+      footerContent: banner.footerContent,
+    },
+    editingTranslation,
+  );
+  const missingCategoryFields = listMissingCategoryTranslations(categories, editingTranslation);
+  const previewLang = rtlPreview ? editingLanguage : previewLanguage;
+  const previewDir = rtlPreview || isRtlLanguage(previewLang) ? 'rtl' : 'ltr';
+
   return (
     <ProtectedLayout>
       <p><Link href={`/domains/${domainId}`}>← Back to domain</Link></p>
@@ -396,14 +742,14 @@ export default function DomainConsentPage() {
       {error && <p className="error">{error}</p>}
 
       <div style={{ display: 'flex', gap: '0.5rem', margin: '1.5rem 0', flexWrap: 'wrap' }}>
-        {(['categories', 'banner', 'policy', 'renewals'] as Tab[]).map((item) => (
+        {(['categories', 'banner', 'languages', 'policy', 'regional', 'renewals'] as Tab[]).map((item) => (
           <button
             key={item}
             className={tab === item ? 'btn' : 'btn btn-secondary'}
             type="button"
             onClick={() => setTab(item)}
           >
-            {item.charAt(0).toUpperCase() + item.slice(1)}
+            {item === 'languages' ? 'Languages' : item.charAt(0).toUpperCase() + item.slice(1)}
           </button>
         ))}
       </div>
@@ -447,6 +793,67 @@ export default function DomainConsentPage() {
               ))}
             </tbody>
           </table>
+
+          <h4 style={{ marginTop: '1.5rem' }}>Script-to-category mappings</h4>
+          <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginBottom: '1rem' }}>
+            URL substrings or <code>/regex/</code> patterns used by manual blocking. Inline elements can also use{' '}
+            <code>data-cmp-category</code>.
+          </p>
+          {categories.map((category) => {
+            const fields = mappingEdits[category.id] ?? mappingsToFields(category.scriptMappings);
+            return (
+              <div key={`mapping-${category.id}`} className="card" style={{ marginBottom: '1rem' }}>
+                <h4 style={{ marginTop: 0 }}>
+                  {category.name} <code>{category.slug}</code>
+                </h4>
+                <div className="field">
+                  <label htmlFor={`scripts-${category.id}`}>External scripts</label>
+                  <input
+                    id={`scripts-${category.id}`}
+                    value={fields.scripts}
+                    placeholder="googletagmanager.com, connect.facebook.net"
+                    onChange={(e) =>
+                      setMappingEdits((current) => ({
+                        ...current,
+                        [category.id]: { ...fields, scripts: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor={`iframes-${category.id}`}>Iframes / embeds</label>
+                  <input
+                    id={`iframes-${category.id}`}
+                    value={fields.iframes}
+                    placeholder="youtube.com/embed, player.vimeo.com"
+                    onChange={(e) =>
+                      setMappingEdits((current) => ({
+                        ...current,
+                        [category.id]: { ...fields, iframes: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor={`pixels-${category.id}`}>Tracking pixels</label>
+                  <input
+                    id={`pixels-${category.id}`}
+                    value={fields.pixels}
+                    placeholder="facebook.com/tr, doubleclick.net"
+                    onChange={(e) =>
+                      setMappingEdits((current) => ({
+                        ...current,
+                        [category.id]: { ...fields, pixels: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+                <button className="btn btn-secondary" type="button" onClick={() => saveCategoryMappings(category)}>
+                  Save mappings
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -585,6 +992,77 @@ export default function DomainConsentPage() {
                 ))}
               </>
             )}
+            <h4 style={{ marginTop: '1.5rem' }}>Embed placeholder overrides</h4>
+            <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
+              Shown when iframes are blocked until consent is granted for the category.
+            </p>
+            {categories
+              .filter((category) => category.slug !== 'strictly_necessary')
+              .map((category) => {
+                const placeholder = banner.embedPlaceholders[category.slug] ?? {
+                  title: '',
+                  description: '',
+                  allowLabel: '',
+                };
+                return (
+                  <div key={`placeholder-${category.slug}`} style={{ marginBottom: '1rem' }}>
+                    <h5>{category.name}</h5>
+                    <div className="field">
+                      <label htmlFor={`ph-title-${category.slug}`}>Title</label>
+                      <input
+                        id={`ph-title-${category.slug}`}
+                        value={placeholder.title}
+                        placeholder="Content blocked until consent"
+                        onChange={(e) =>
+                          setBanner({
+                            ...banner,
+                            embedPlaceholders: {
+                              ...banner.embedPlaceholders,
+                              [category.slug]: { ...placeholder, title: e.target.value },
+                            },
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor={`ph-desc-${category.slug}`}>Description</label>
+                      <textarea
+                        id={`ph-desc-${category.slug}`}
+                        rows={2}
+                        maxLength={500}
+                        value={placeholder.description}
+                        placeholder={`${category.name} content is blocked until you grant consent.`}
+                        onChange={(e) =>
+                          setBanner({
+                            ...banner,
+                            embedPlaceholders: {
+                              ...banner.embedPlaceholders,
+                              [category.slug]: { ...placeholder, description: e.target.value },
+                            },
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor={`ph-allow-${category.slug}`}>Allow button label</label>
+                      <input
+                        id={`ph-allow-${category.slug}`}
+                        value={placeholder.allowLabel}
+                        placeholder="Allow this content"
+                        onChange={(e) =>
+                          setBanner({
+                            ...banner,
+                            embedPlaceholders: {
+                              ...banner.embedPlaceholders,
+                              [category.slug]: { ...placeholder, allowLabel: e.target.value },
+                            },
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             <h4 style={{ marginTop: '1.5rem' }}>Behavior</h4>
             <div className="field">
               <label><input type="checkbox" checked={banner.behavior.displayOnFirstVisit} onChange={(e) => setBanner({ ...banner, behavior: { ...banner.behavior, displayOnFirstVisit: e.target.checked } })} /> Display on first visit</label>
@@ -687,6 +1165,20 @@ export default function DomainConsentPage() {
               <label htmlFor="customCss">Custom CSS (banner only)</label>
               <textarea id="customCss" rows={4} maxLength={4000} value={banner.theme.customCss} onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, customCss: e.target.value } })} placeholder="border-width: 2px;" />
             </div>
+            {themeContrastWarnings.length > 0 && (
+              <div style={{ marginTop: '0.75rem', fontSize: '0.8125rem' }}>
+                <strong>Contrast checks</strong>
+                {themeContrastWarnings.map((warning) => (
+                  <p
+                    key={warning.pair}
+                    style={{ margin: '0.25rem 0', color: warning.passes === false ? '#b45309' : 'var(--muted)' }}
+                  >
+                    {warning.pair}: {warning.ratio ? warning.ratio.toFixed(2) : 'n/a'}:1
+                    {warning.passes === false ? ' — may be too low for WCAG AA' : ''}
+                  </p>
+                ))}
+              </div>
+            )}
             <h4 style={{ marginTop: '1.5rem' }}>Privacy trigger</h4>
             <div className="field">
               <label><input type="checkbox" checked={banner.privacyTrigger.enabled} onChange={(e) => setBanner({ ...banner, privacyTrigger: { ...banner.privacyTrigger, enabled: e.target.checked } })} /> Show privacy trigger after consent</label>
@@ -733,37 +1225,362 @@ export default function DomainConsentPage() {
           </form>
 
           <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
               <h3>Live preview</h3>
-              <select value={previewViewport} onChange={(e) => setPreviewViewport(e.target.value as typeof previewViewport)}>
-                <option value="desktop">Desktop</option>
-                <option value="tablet">Tablet</option>
-                <option value="mobile">Mobile</option>
-              </select>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <select value={previewCountry} onChange={(e) => setPreviewCountry(e.target.value)}>
+                  <option value="DE">Preview: Germany (GDPR)</option>
+                  <option value="GB">Preview: UK</option>
+                  <option value="US">Preview: United States</option>
+                  <option value="BR">Preview: Brazil</option>
+                  <option value="CA">Preview: Canada</option>
+                  <option value="JP">Preview: Japan (default)</option>
+                </select>
+                <select value={previewLanguage} onChange={(e) => setPreviewLanguage(e.target.value)}>
+                  {supportedLanguages.map((code) => (
+                    <option key={code} value={code}>
+                      Preview: {COMMON_LANGUAGE_OPTIONS.find((o) => o.code === code)?.label ?? code}
+                    </option>
+                  ))}
+                </select>
+                <select value={previewViewport} onChange={(e) => setPreviewViewport(e.target.value as typeof previewViewport)}>
+                  <option value="desktop">Desktop</option>
+                  <option value="tablet">Tablet</option>
+                  <option value="mobile">Mobile</option>
+                </select>
+              </div>
             </div>
             <BannerPreview
-              title={banner.title}
-              description={banner.description}
-              contentFormat={banner.contentFormat}
-              acceptButton={banner.acceptButton}
-              rejectButton={banner.rejectButton}
-              preferencesButton={banner.preferencesButton}
-              saveButton={banner.saveButton}
-              closeButton={banner.closeButton}
-              legalNotice={banner.legalNotice}
-              footerContent={banner.footerContent}
-              privacyPolicyUrl={banner.privacyPolicyUrl}
-              cookiePolicyUrl={banner.cookiePolicyUrl}
-              layout={banner.layout}
-              theme={banner.theme}
+              title={previewBannerForLanguage(previewLang).title}
+              description={previewBannerForLanguage(previewLang).description}
+              contentFormat={previewBannerForLanguage(previewLang).contentFormat}
+              acceptButton={previewBannerForLanguage(previewLang).acceptButton}
+              rejectButton={previewBannerForLanguage(previewLang).rejectButton}
+              preferencesButton={previewBannerForLanguage(previewLang).preferencesButton}
+              saveButton={previewBannerForLanguage(previewLang).saveButton}
+              closeButton={previewBannerForLanguage(previewLang).closeButton}
+              legalNotice={previewBannerForLanguage(previewLang).legalNotice}
+              footerContent={previewBannerForLanguage(previewLang).footerContent}
+              privacyPolicyUrl={previewBannerForLanguage(previewLang).privacyPolicyUrl}
+              cookiePolicyUrl={previewBannerForLanguage(previewLang).cookiePolicyUrl}
+              layout={previewBannerForLanguage(previewLang).layout}
+              theme={previewBannerForLanguage(previewLang).theme}
               viewport={previewViewport}
+              dir={previewDir}
+            />
+          </div>
+        </div>
+      )}
+
+      {tab === 'languages' && (
+        <div className="grid-2">
+          <div className="card">
+            <h3>Languages & translations</h3>
+            <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
+              Default copy is edited on the Banner tab. Add translations for additional languages below.
+              Visitors receive content based on URL <code>cmp_lang</code>, stored preference, script{' '}
+              <code>data-lang</code>, or browser language.
+            </p>
+
+            <h4 style={{ marginTop: '1.25rem' }}>Supported languages</h4>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+              {COMMON_LANGUAGE_OPTIONS.map((option) => (
+                <label key={option.code} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={supportedLanguages.includes(option.code)}
+                    onChange={() => toggleSupportedLanguage(option.code)}
+                  />
+                  {option.label}
+                  {option.rtl ? ' (RTL)' : ''}
+                </label>
+              ))}
+            </div>
+
+            <div className="field">
+              <label htmlFor="defaultLanguage">Default language</label>
+              <select
+                id="defaultLanguage"
+                value={defaultLanguage}
+                onChange={(e) => setDefaultLanguage(e.target.value)}
+              >
+                {supportedLanguages.map((code) => (
+                  <option key={code} value={code}>
+                    {COMMON_LANGUAGE_OPTIONS.find((o) => o.code === code)?.label ?? code}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field">
+              <label htmlFor="editingLanguage">Edit translations for</label>
+              <select
+                id="editingLanguage"
+                value={editingLanguage}
+                onChange={(e) => setEditingLanguage(e.target.value)}
+              >
+                {supportedLanguages
+                  .filter((code) => code !== defaultLanguage)
+                  .map((code) => (
+                    <option key={code} value={code}>
+                      {COMMON_LANGUAGE_OPTIONS.find((o) => o.code === code)?.label ?? code}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {(missingBannerFields.length > 0 || missingCategoryFields.length > 0) && (
+              <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#fffbeb', borderRadius: 8 }}>
+                <strong>Missing translations</strong>
+                {missingBannerFields.length > 0 && (
+                  <p style={{ margin: '0.35rem 0', fontSize: '0.875rem' }}>
+                    Banner: {missingBannerFields.join(', ')}
+                  </p>
+                )}
+                {missingCategoryFields.length > 0 && (
+                  <p style={{ margin: '0.35rem 0', fontSize: '0.875rem' }}>
+                    Categories: {missingCategoryFields.join(', ')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {supportedLanguages.filter((code) => code !== defaultLanguage).length === 0 ? (
+              <p style={{ color: 'var(--muted)' }}>Add a language other than the default to edit translations.</p>
+            ) : (
+              <>
+                <div className="field">
+                  <label htmlFor="tr-title">
+                    Title {missingBannerFields.includes('title') ? '(missing)' : ''}
+                  </label>
+                  <input
+                    id="tr-title"
+                    value={editingTranslation?.title ?? ''}
+                    onChange={(e) => updateTranslationField(editingLanguage, 'title', e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="tr-description">
+                    Description {missingBannerFields.includes('description') ? '(missing)' : ''}
+                  </label>
+                  <textarea
+                    id="tr-description"
+                    rows={3}
+                    maxLength={2000}
+                    value={editingTranslation?.description ?? ''}
+                    onChange={(e) => updateTranslationField(editingLanguage, 'description', e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="tr-accept">Accept button</label>
+                  <input
+                    id="tr-accept"
+                    value={editingTranslation?.acceptButton ?? ''}
+                    onChange={(e) => updateTranslationField(editingLanguage, 'acceptButton', e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="tr-reject">Reject button</label>
+                  <input
+                    id="tr-reject"
+                    value={editingTranslation?.rejectButton ?? ''}
+                    onChange={(e) => updateTranslationField(editingLanguage, 'rejectButton', e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="tr-prefs">Customize button</label>
+                  <input
+                    id="tr-prefs"
+                    value={editingTranslation?.preferencesButton ?? ''}
+                    onChange={(e) => updateTranslationField(editingLanguage, 'preferencesButton', e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="tr-save">Save button</label>
+                  <input
+                    id="tr-save"
+                    value={editingTranslation?.saveButton ?? ''}
+                    onChange={(e) => updateTranslationField(editingLanguage, 'saveButton', e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="tr-close">Close button</label>
+                  <input
+                    id="tr-close"
+                    value={editingTranslation?.closeButton ?? ''}
+                    onChange={(e) => updateTranslationField(editingLanguage, 'closeButton', e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="tr-legal">Legal notice</label>
+                  <textarea
+                    id="tr-legal"
+                    rows={2}
+                    value={editingTranslation?.legalNotice ?? ''}
+                    onChange={(e) => updateTranslationField(editingLanguage, 'legalNotice', e.target.value)}
+                  />
+                </div>
+                <h4 style={{ marginTop: '1rem' }}>Category translations</h4>
+                {categories.map((category) => (
+                  <div key={category.id} style={{ marginBottom: '0.75rem' }}>
+                    <div className="field">
+                      <label htmlFor={`tr-cat-name-${category.slug}`}>
+                        {category.name} — name
+                        {missingCategoryFields.includes(`${category.slug}:name`) ? ' (missing)' : ''}
+                      </label>
+                      <input
+                        id={`tr-cat-name-${category.slug}`}
+                        value={editingTranslation?.categoryNames?.[category.slug] ?? ''}
+                        placeholder={category.name}
+                        onChange={(e) =>
+                          updateTranslationCategoryField(editingLanguage, category.slug, 'name', e.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor={`tr-cat-desc-${category.slug}`}>
+                        {category.name} — description
+                        {missingCategoryFields.includes(`${category.slug}:description`) ? ' (missing)' : ''}
+                      </label>
+                      <textarea
+                        id={`tr-cat-desc-${category.slug}`}
+                        rows={2}
+                        value={editingTranslation?.categoryDescriptions?.[category.slug] ?? ''}
+                        placeholder={category.description ?? ''}
+                        onChange={(e) =>
+                          updateTranslationCategoryField(
+                            editingLanguage,
+                            category.slug,
+                            'description',
+                            e.target.value,
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+              <button className="btn" type="button" onClick={saveLanguages}>Save languages</button>
+              <button className="btn btn-secondary" type="button" onClick={suggestTranslations}>
+                Suggest translations
+              </button>
+            </div>
+            <div className="field" style={{ marginTop: '1rem' }}>
+              <label>
+                <input type="checkbox" checked={rtlPreview} onChange={(e) => setRtlPreview(e.target.checked)} />
+                RTL preview mode
+              </label>
+            </div>
+          </div>
+
+          <div className="card">
+            <h3>Translation preview</h3>
+            <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
+              Previewing {previewLang} ({previewDir.toUpperCase()})
+            </p>
+            <BannerPreview
+              title={previewBannerForLanguage(previewLang).title}
+              description={previewBannerForLanguage(previewLang).description}
+              contentFormat={previewBannerForLanguage(previewLang).contentFormat}
+              acceptButton={previewBannerForLanguage(previewLang).acceptButton}
+              rejectButton={previewBannerForLanguage(previewLang).rejectButton}
+              preferencesButton={previewBannerForLanguage(previewLang).preferencesButton}
+              saveButton={previewBannerForLanguage(previewLang).saveButton}
+              layout={previewBannerForLanguage(previewLang).layout}
+              theme={previewBannerForLanguage(previewLang).theme}
+              viewport="desktop"
+              dir={previewDir}
             />
           </div>
         </div>
       )}
 
       {tab === 'policy' && (
-        <div className="card">
+        <div>
+          <div className="card" style={{ marginBottom: '1.5rem' }}>
+            <h3>Google Consent Mode</h3>
+            <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
+              Configure Consent Mode v2 signals emitted by the CMP before and after visitor choices.
+              Load the CMP snippet before GTM or gtag for correct default ordering.
+            </p>
+            <div className="field">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={googleConsentMode.enabled}
+                  onChange={(e) => setGoogleConsentMode({ ...googleConsentMode, enabled: e.target.checked })}
+                />
+                Enable Google Consent Mode
+              </label>
+            </div>
+            <div className="field">
+              <label htmlFor="gcmMode">Mode</label>
+              <select
+                id="gcmMode"
+                value={googleConsentMode.mode}
+                onChange={(e) =>
+                  setGoogleConsentMode({
+                    ...googleConsentMode,
+                    mode: e.target.value as GoogleConsentModeConfig['mode'],
+                  })
+                }
+              >
+                <option value="advanced">Advanced (denied defaults, tags load with limited data)</option>
+                <option value="basic">Basic (block tags until consent)</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="gcmWaitForUpdate">Wait for update (ms)</label>
+              <input
+                id="gcmWaitForUpdate"
+                type="number"
+                min={0}
+                max={5000}
+                value={googleConsentMode.waitForUpdate}
+                onChange={(e) =>
+                  setGoogleConsentMode({
+                    ...googleConsentMode,
+                    waitForUpdate: Number(e.target.value),
+                  })
+                }
+              />
+            </div>
+            <div className="field">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={googleConsentMode.adsDataRedaction}
+                  onChange={(e) =>
+                    setGoogleConsentMode({ ...googleConsentMode, adsDataRedaction: e.target.checked })
+                  }
+                />
+                Ads data redaction
+              </label>
+            </div>
+            <div className="field">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={googleConsentMode.urlPassthrough}
+                  onChange={(e) =>
+                    setGoogleConsentMode({ ...googleConsentMode, urlPassthrough: e.target.checked })
+                  }
+                />
+                URL passthrough
+              </label>
+            </div>
+            <button className="btn" type="button" onClick={saveGoogleConsentMode}>
+              Save Consent Mode settings
+            </button>
+            <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginTop: '1rem' }}>
+              Publish the policy after saving so live sites receive the updated regulation config.
+            </p>
+          </div>
+
+          <div className="card">
           <h3>Policy versions</h3>
           <div className="field" style={{ marginTop: '1rem' }}>
             <label htmlFor="scheduleAt">Schedule publish</label>
@@ -790,6 +1607,73 @@ export default function DomainConsentPage() {
               ))}
             </tbody>
           </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 'regional' && (
+        <div className="card">
+          <h3>Geo targeting &amp; regulation profiles</h3>
+          <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
+            Regional rules map visitor countries to regulation profiles (GDPR opt-in, CCPA opt-out, etc.).
+            Publish the policy after saving. Server geo uses CDN country headers when enabled at organization level.
+          </p>
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                checked={geoSettings.enabled}
+                onChange={(e) => setGeoSettings({ ...geoSettings, enabled: e.target.checked })}
+              />
+              Enable regional rules for this policy
+            </label>
+          </div>
+          <div className="field">
+            <label htmlFor="defaultProfileId">Default profile (no rule match)</label>
+            <select
+              id="defaultProfileId"
+              value={geoSettings.defaultProfileId}
+              onChange={(e) => setGeoSettings({ ...geoSettings, defaultProfileId: e.target.value })}
+            >
+              {REGULATION_PROFILE_OPTIONS.map((profile) => (
+                <option key={profile.id} value={profile.id}>{profile.name}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            className="btn btn-secondary"
+            type="button"
+            onClick={() => setGeoSettings({ ...geoSettings, regionalRules: DEFAULT_REGIONAL_RULES })}
+          >
+            Reset to default regional rules
+          </button>
+          <table style={{ marginTop: '1.5rem' }}>
+            <thead>
+              <tr>
+                <th>Rule</th>
+                <th>Conditions</th>
+                <th>Profile</th>
+                <th>Priority</th>
+              </tr>
+            </thead>
+            <tbody>
+              {geoSettings.regionalRules.map((rule) => (
+                <tr key={rule.id}>
+                  <td>{rule.name}</td>
+                  <td>
+                    <code>
+                      {(rule.conditions.countryGroups ?? rule.conditions.countries ?? []).join(', ') || '—'}
+                    </code>
+                  </td>
+                  <td>{REGULATION_PROFILE_OPTIONS.find((p) => p.id === rule.profileId)?.name ?? rule.profileId}</td>
+                  <td>{rule.priority}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button className="btn" type="button" style={{ marginTop: '1rem' }} onClick={saveGeoSettings}>
+            Save regional settings
+          </button>
         </div>
       )}
 

@@ -5,17 +5,26 @@ import { detectVisitorRegion } from './region';
 import { getOrCreateVisitorId, rotateVisitorId } from './visitor-id';
 import { readStorage, writeStorage } from './storage';
 
+const visitorOptions = (domainKey: string) => ({ domainKey });
+
 describe('visitor id', () => {
   it('creates and reuses a visitor id', () => {
-    const first = getOrCreateVisitorId('dk_test');
-    const second = getOrCreateVisitorId('dk_test');
+    const first = getOrCreateVisitorId(visitorOptions('dk_test'));
+    const second = getOrCreateVisitorId(visitorOptions('dk_test'));
     expect(second.visitorId).toBe(first.visitorId);
   });
 
   it('rotates expired visitor ids', () => {
-    const first = getOrCreateVisitorId('dk_rotate');
-    const rotated = rotateVisitorId('dk_rotate');
+    const first = getOrCreateVisitorId(visitorOptions('dk_rotate'));
+    const rotated = rotateVisitorId(visitorOptions('dk_rotate'));
     expect(rotated.visitorId).not.toBe(first.visitorId);
+  });
+
+  it('shares visitor id across subdomains when configured', () => {
+    const shared = { domainKey: 'dk_a', sharedCookieDomain: '.example.com' };
+    const first = getOrCreateVisitorId(shared);
+    const second = getOrCreateVisitorId({ domainKey: 'dk_b', sharedCookieDomain: '.example.com' });
+    expect(second.visitorId).toBe(first.visitorId);
   });
 });
 
@@ -34,12 +43,14 @@ describe('consent persistence', () => {
         configVersion: 2,
         categories: { strictly_necessary: true, analytics: false },
         expiresAt: Date.now() + 86_400_000,
+        consentToken: 'token.example',
       },
       { rememberChoice: true, consentExpirationDays: 365 },
     );
 
     const stored = loadConsent('dk_persist', 2);
     expect(stored?.categories).toEqual({ strictly_necessary: true, analytics: false });
+    expect(stored?.consentToken).toBe('token.example');
   });
 });
 

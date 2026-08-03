@@ -17,6 +17,7 @@ import {
   reorderConsentCategoriesSchema,
   schedulePolicySchema,
   triggerRenewalSchema,
+  translationSuggestionSchema,
   updateConsentCategorySchema,
   updatePolicyVersionSchema,
 } from '@cmp/validation';
@@ -26,11 +27,15 @@ import { ok } from '../common/utils/response';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { CurrentUserDecorator } from '../auth/decorators/current-user.decorator';
 import { ConsentService } from './consent.service';
+import { TranslationService } from './translation.service';
 
 @Controller('domains/:domainId/consent')
 @RequirePermissions(PERMISSIONS.BANNER_CONFIGURE)
 export class ConsentController {
-  constructor(private readonly consentService: ConsentService) {}
+  constructor(
+    private readonly consentService: ConsentService,
+    private readonly translationService: TranslationService,
+  ) {}
 
   @Get('categories')
   listCategories(
@@ -129,6 +134,24 @@ export class ConsentController {
         meta(req),
       )
       .then(ok);
+  }
+
+  @Post('policies/:policyId/translation-suggestions')
+  suggestTranslations(
+    @CurrentUserDecorator() user: CurrentUser,
+    @Param('domainId') domainId: string,
+    @Param('policyId') policyId: string,
+    @Body(new ZodValidationPipe(translationSuggestionSchema))
+    body: { targetLanguage: string; source?: Record<string, unknown> },
+  ) {
+    void user;
+    void domainId;
+    void policyId;
+    return ok(
+      this.translationService.suggest(body.targetLanguage, (body.source ?? {}) as Parameters<
+        TranslationService['suggest']
+      >[1]),
+    );
   }
 
   @Post('policies/:policyId/publish')

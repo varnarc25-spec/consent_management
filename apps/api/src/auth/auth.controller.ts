@@ -40,6 +40,15 @@ export class AuthController {
   }
 
   @Public()
+  @Get('sso/start')
+  async ssoStart(@Query('org') orgSlug: string) {
+    if (!orgSlug) {
+      return { ok: false, error: { code: 'ORG_REQUIRED', message: 'org query parameter required' } };
+    }
+    return this.authService.getSsoLoginHint(orgSlug);
+  }
+
+  @Public()
   @Post('register')
   register(@Body(new ZodValidationPipe(registerSchema)) body: unknown) {
     return this.authService.register(body as Parameters<AuthService['register']>[0]).then(ok);

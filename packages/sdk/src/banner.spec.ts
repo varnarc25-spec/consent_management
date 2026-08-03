@@ -173,6 +173,48 @@ describe('renderBanner', () => {
     handle?.destroy();
   });
 
+  it('renders consent metadata in preferences when provided', () => {
+    document.body.innerHTML = '';
+    const onConsent = vi.fn();
+    const savedAt = new Date('2026-01-15T10:00:00.000Z').toISOString();
+    const expiresAt = new Date('2027-01-15T10:00:00.000Z').toISOString();
+    const handle = renderBanner(
+      {
+        domainKey: 'dk_test',
+        configVersion: 1,
+        categories,
+        consentMetadata: {
+          savedAt,
+          expiresAt,
+          policyVersionId: 'pv_abc',
+          policyVersionNumber: 4,
+          region: 'EU',
+          language: 'en',
+        },
+        banner: {
+          title: 'Privacy',
+          description: 'We use cookies.',
+          acceptButton: 'Accept all',
+          rejectButton: 'Reject all',
+          preferencesButton: 'Customize',
+          saveButton: 'Save preferences',
+          layout: 'bottom_bar',
+        },
+      },
+      onConsent,
+    );
+    handle?.show();
+    (document.querySelector('[data-cmp-action="customize"]') as HTMLButtonElement).click();
+
+    const metadata = document.querySelector('.cmp-metadata');
+    expect(metadata).toBeTruthy();
+    expect(metadata?.textContent).toContain('Consent date');
+    expect(metadata?.textContent).toContain('Policy version');
+    expect(metadata?.textContent).toContain('4');
+    expect(metadata?.textContent).toContain('Expires');
+    handle?.destroy();
+  });
+
   it('renders multi-step modal with continue action', () => {
     document.body.innerHTML = '';
     const handle = renderBanner(

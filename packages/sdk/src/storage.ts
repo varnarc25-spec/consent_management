@@ -1,5 +1,23 @@
 const COOKIE_PREFIX = 'cmp_';
 
+export interface StorageOptions {
+  cookieDomain?: string | null;
+}
+
+let defaultCookieDomain: string | null = null;
+
+export function setDefaultCookieDomain(domain: string | null) {
+  defaultCookieDomain = domain;
+}
+
+export function getDefaultCookieDomain() {
+  return defaultCookieDomain;
+}
+
+function resolveCookieDomain(options?: StorageOptions) {
+  return options?.cookieDomain ?? defaultCookieDomain ?? null;
+}
+
 function encodeCookieValue(value: string) {
   return encodeURIComponent(value);
 }
@@ -12,24 +30,28 @@ function decodeCookieValue(value: string) {
   }
 }
 
-export function readCookie(name: string): string | null {
+export function readCookie(name: string, options?: StorageOptions): string | null {
   if (typeof document === 'undefined') return null;
   const match = document.cookie.match(new RegExp(`(?:^|; )${COOKIE_PREFIX}${name}=([^;]*)`));
   return match?.[1] ? decodeCookieValue(match[1]) : null;
 }
 
-export function writeCookie(name: string, value: string, maxAgeSeconds: number) {
+export function writeCookie(name: string, value: string, maxAgeSeconds: number, options?: StorageOptions) {
   if (typeof document === 'undefined') return;
   const secure = location.protocol === 'https:' ? '; Secure' : '';
-  document.cookie = `${COOKIE_PREFIX}${name}=${encodeCookieValue(value)}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secure}`;
+  const domain = resolveCookieDomain(options);
+  const domainAttr = domain ? `; Domain=${domain}` : '';
+  document.cookie = `${COOKIE_PREFIX}${name}=${encodeCookieValue(value)}; Path=/${domainAttr}; Max-Age=${maxAgeSeconds}; SameSite=Lax${secure}`;
 }
 
-export function removeCookie(name: string) {
+export function removeCookie(name: string, options?: StorageOptions) {
   if (typeof document === 'undefined') return;
-  document.cookie = `${COOKIE_PREFIX}${name}=; Path=/; Max-Age=0; SameSite=Lax`;
+  const domain = resolveCookieDomain(options);
+  const domainAttr = domain ? `; Domain=${domain}` : '';
+  document.cookie = `${COOKIE_PREFIX}${name}=; Path=/${domainAttr}; Max-Age=0; SameSite=Lax`;
 }
 
-export function readStorage(key: string): string | null {
+export function readStorage(key: string, options?: StorageOptions): string | null {
   if (typeof localStorage !== 'undefined') {
     try {
       const value = localStorage.getItem(key);
@@ -38,10 +60,10 @@ export function readStorage(key: string): string | null {
       // localStorage may be blocked
     }
   }
-  return readCookie(key.replace(/^cmp_/, ''));
+  return readCookie(key.replace(/^cmp_/, ''), options);
 }
 
-export function writeStorage(key: string, value: string, maxAgeSeconds = 31_536_000) {
+export function writeStorage(key: string, value: string, maxAgeSeconds = 31_536_000, options?: StorageOptions) {
   let persisted = false;
   if (typeof localStorage !== 'undefined') {
     try {
@@ -51,12 +73,13 @@ export function writeStorage(key: string, value: string, maxAgeSeconds = 31_536_
       // fall back to cookie
     }
   }
-  if (!persisted) {
-    writeCookie(key.replace(/^cmp_/, ''), value, maxAgeSeconds);
+  writeCookie(key.replace(/^cmp_/, ''), value, maxAgeSeconds, options);
+  if (!persisted && typeof localStorage === 'undefined') {
+    // cookie-only path already handled
   }
 }
 
-export function removeStorage(key: string) {
+export function removeStorage(key: string, options?: StorageOptions) {
   if (typeof localStorage !== 'undefined') {
     try {
       localStorage.removeItem(key);
@@ -64,5 +87,5 @@ export function removeStorage(key: string) {
       // ignore
     }
   }
-  removeCookie(key.replace(/^cmp_/, ''));
+  removeCookie(key.replace(/^cmp_/, ''), options);
 }

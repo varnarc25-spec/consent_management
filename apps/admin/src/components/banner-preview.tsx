@@ -33,6 +33,7 @@ export interface BannerPreviewProps {
     customCss?: string;
   };
   viewport?: 'desktop' | 'tablet' | 'mobile';
+  dir?: 'ltr' | 'rtl';
 }
 
 const layoutStyles: Record<string, CSSProperties> = {
@@ -70,6 +71,7 @@ export function BannerPreview({
   layout,
   theme,
   viewport = 'desktop',
+  dir = 'ltr',
 }: BannerPreviewProps) {
   const frameWidth = viewport === 'mobile' ? 375 : viewport === 'tablet' ? 768 : 1100;
   const primary = theme?.primaryColor ?? '#2563eb';
@@ -118,6 +120,7 @@ export function BannerPreview({
         <section
           aria-label="Banner preview"
           className="cmp-preview-root"
+          dir={dir}
           style={{
             position: 'absolute',
             background,
@@ -128,6 +131,12 @@ export function BannerPreview({
             fontFamily: theme?.fontFamily,
             fontSize: theme?.fontSize,
             ...layoutStyles[layout],
+            ...(dir === 'rtl' && layout === 'corner_popup'
+              ? { left: '1rem', right: 'auto' }
+              : {}),
+            ...(dir === 'rtl' && layout === 'side_panel'
+              ? { left: 0, right: 'auto', borderLeft: 'none', borderRight: '1px solid #e5e7eb' }
+              : {}),
           }}
         >
           {theme?.logoUrl ? (

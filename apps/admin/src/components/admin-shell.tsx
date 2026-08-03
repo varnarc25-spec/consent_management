@@ -7,8 +7,15 @@ import type { CurrentUser } from '@cmp/types';
 import { clearStoredTokens } from '@/lib/api';
 
 const NAV_ITEMS = [
+  { href: '/dashboard', label: 'Dashboard', permission: PERMISSIONS.CONSENT_VIEW },
   { href: '/domains', label: 'Domains', permission: PERMISSIONS.DOMAIN_MANAGE },
+  { href: '/analytics', label: 'Analytics', permission: PERMISSIONS.CONSENT_VIEW },
+  { href: '/reports', label: 'Reports', permission: PERMISSIONS.CONSENT_EXPORT },
+  { href: '/notifications', label: 'Notifications', permission: PERMISSIONS.CONSENT_VIEW },
+  { href: '/consent-records', label: 'Consent Logs', permission: PERMISSIONS.CONSENT_VIEW },
+  { href: '/developers', label: 'Developers', permission: PERMISSIONS.API_KEY_MANAGE },
   { href: '/organization', label: 'Organization', permission: PERMISSIONS.ORGANIZATION_MANAGE },
+  { href: '/enterprise', label: 'Enterprise', permission: PERMISSIONS.ORGANIZATION_MANAGE },
   { href: '/users', label: 'Users', permission: PERMISSIONS.USER_MANAGE },
   { href: '/audit-logs', label: 'Audit Logs', permission: PERMISSIONS.AUDIT_VIEW },
 ];

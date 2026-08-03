@@ -22,12 +22,14 @@ import {
   type ConsentRenewalResponse,
   type PolicyVersionResponse,
 } from './consent-response';
+import { WebhookDeliveryService } from '../webhooks/webhook-delivery.service';
 
 @Injectable()
 export class ConsentService {
   constructor(
     @Inject(REPOS) private readonly repos: Repositories,
     private readonly auditService: AuditService,
+    private readonly webhookDelivery: WebhookDeliveryService,
   ) {}
 
   async listCategories(user: CurrentUser, domainId: string): Promise<ConsentCategoryResponse[]> {
@@ -241,6 +243,12 @@ export class ConsentService {
         module: 'consent',
         newValue: { domainId, policyId, versionNumber: published.versionNumber },
         ...meta,
+      });
+      void this.webhookDelivery.emit(policy.organizationId, 'policy.published', {
+        domainId,
+        policyVersionId: published.id,
+        versionNumber: published.versionNumber,
+        publishedAt: published.publishedAt?.toISOString() ?? null,
       });
       return toPolicyResponse(published);
     } catch (error) {

@@ -30,7 +30,7 @@ const SETUP_ITEMS = [
   {
     id: 'scan',
     title: 'Website scan',
-    note: 'Coming in a future release.',
+    note: 'Crawl your site to detect cookies and trackers.',
     action: null,
   },
   {
@@ -96,6 +96,11 @@ export function SetupGuide({
               {item.id === 'banner' && hasDomains && firstDomainId && (
                 <Link className="btn-link" href={`/websites/${firstDomainId}/consent`}>
                   Configure consent
+                </Link>
+              )}
+              {item.id === 'scan' && hasDomains && firstDomainId && (
+                <Link className="btn-link" href={`/websites/${firstDomainId}/scans`}>
+                  Run scan
                 </Link>
               )}
               {item.action && item.id !== 'banner' && item.id !== 'domain' && (
