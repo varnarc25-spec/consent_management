@@ -30,6 +30,8 @@ steps:
         --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
       - '--region=$_DEPLOY_REGION'
       - '--port=8080'
+      - '--memory=2Gi'
+      - '--cpu=2'
       - >-
         --set-env-vars=NODE_ENV=production,API_PREFIX=api/v1,API_URL=https://consent-management-api-414895350436.us-central1.run.app,ADMIN_URL=https://consent-management-admin-414895350436.us-central1.run.app,EMAIL_VERIFICATION_ENABLED=false,DOMAIN_AUTO_VERIFY=false
       - >-
