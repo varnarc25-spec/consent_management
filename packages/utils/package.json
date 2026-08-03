@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./banner-templates": {
+      "types": "./dist/banner-templates.d.ts",
+      "default": "./dist/banner-templates.js"
     }
   },
   "scripts": {

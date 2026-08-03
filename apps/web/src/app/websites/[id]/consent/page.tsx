@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { BannerPreview } from '@/components/banner-preview';
 import { ProtectedLayout } from '@/components/protected-layout';
 import { apiFetch } from '@/lib/api';
-import { BANNER_TEXT_TEMPLATES } from '@cmp/utils';
+import { BANNER_TEXT_TEMPLATES } from '@cmp/utils/banner-templates';
 
 interface Category {
   id: string;
