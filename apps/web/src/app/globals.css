@@ -525,7 +525,24 @@ code {
   margin-top: 3rem;
 }
 
-.site-header {
+.cmp-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.cmp-logo-mark {
+  display: block;
+  border-radius: 6px;
+}
+
+.cmp-logo-text {
+  line-height: 1;
+}
+
   display: flex;
   justify-content: space-between;
   align-items: center;

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { CurrentUser } from '@cmp/types';
+import { CmpLogo } from '@/components/cmp-logo';
 import { clearStoredTokens } from '@/lib/api';
 
 const NAV_ITEMS = [
@@ -34,7 +35,7 @@ export function UserShell({
   return (
     <div className="portal-layout">
       <header className="nav" role="banner">
-        <strong>CMP Portal</strong>
+        <CmpLogo label="CMP Portal" />
         <nav aria-label="Main navigation" className="nav-links">
           {NAV_ITEMS.map((item) => (
             <Link

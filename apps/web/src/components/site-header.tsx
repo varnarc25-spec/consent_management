@@ -1,4 +1,5 @@
 import { AuthNavLink } from '@/components/auth-nav-link';
+import { CmpLogo } from '@/components/cmp-logo';
 import { isAuthUiEnabled } from '@cmp/auth';
 import { getAdminUrl } from '@/lib/admin-url';
 
@@ -11,7 +12,7 @@ export function SiteHeader({
 }) {
   return (
     <header className="site-header">
-      <strong>CMP</strong>
+      <CmpLogo label="CMP" />
       <nav aria-label="Site navigation">
         <a href="#features">Features</a>
         <a href="#compliance">Compliance</a>
