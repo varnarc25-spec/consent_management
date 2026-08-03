@@ -2,7 +2,7 @@
 # In GCP Console: Configuration → Cloud Build configuration file → Repository → cloudbuild.api.yaml
 #
 # Before first deploy, create secrets in Secret Manager:
-#   DATABASE_URL, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET
+#   CM_DATABASE_URL, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET
 # Then set substitution variables on the trigger (see substitutions below).
 
 steps:
@@ -38,7 +38,7 @@ steps:
       - '--startup-probe=initialDelaySeconds=15,timeoutSeconds=5,periodSeconds=10,failureThreshold=12,httpGet.path=/api/v1/health,httpGet.port=8080'
       - >-
         --set-env-vars=NODE_ENV=production,API_PREFIX=api/v1,API_URL=${_API_URL},ADMIN_URL=${_ADMIN_URL},WEB_URL=${_WEB_URL},EMAIL_VERIFICATION_ENABLED=false,DOMAIN_AUTO_VERIFY=false,AUTH0_DOMAIN=${_AUTH0_DOMAIN},AUTH0_AUDIENCE=${_AUTH0_AUDIENCE},AUTH0_ISSUER_URL=https://${_AUTH0_DOMAIN}/
-      - '--set-secrets=DATABASE_URL=DATABASE_URL:latest,JWT_ACCESS_SECRET=JWT_ACCESS_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest'
+      - '--set-secrets=CM_DATABASE_URL=CM_DATABASE_URL:latest,JWT_ACCESS_SECRET=JWT_ACCESS_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest'
       - '--labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID'
       - '--quiet'
 

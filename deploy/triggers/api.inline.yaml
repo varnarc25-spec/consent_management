@@ -33,7 +33,7 @@ steps:
       - >-
         --set-env-vars=NODE_ENV=production,API_PREFIX=api/v1,API_URL=https://consent-management-api-414895350436.us-central1.run.app,ADMIN_URL=https://consent-management-admin-414895350436.us-central1.run.app,EMAIL_VERIFICATION_ENABLED=false,DOMAIN_AUTO_VERIFY=false
       - >-
-        --set-secrets=DATABASE_URL=DATABASE_URL:latest,JWT_ACCESS_SECRET=JWT_ACCESS_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest
+        --set-secrets=CM_DATABASE_URL=CM_DATABASE_URL:latest,JWT_ACCESS_SECRET=JWT_ACCESS_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest
       - >-
         --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID
       - '--quiet'

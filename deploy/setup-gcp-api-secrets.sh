@@ -29,8 +29,8 @@ if [[ -f .env ]]; then
   set +a
 fi
 
-if [[ -z "${DATABASE_URL:-}" ]]; then
-  echo "ERROR: DATABASE_URL not set. Add it to .env or export it before running." >&2
+if [[ -z "${CM_DATABASE_URL:-}" ]]; then
+  echo "ERROR: CM_DATABASE_URL not set. Add it to .env or export it before running." >&2
   exit 1
 fi
 
@@ -51,7 +51,7 @@ create_or_update_secret() {
 JWT_ACCESS="$(openssl rand -hex 32)"
 JWT_REFRESH="$(openssl rand -hex 32)"
 
-create_or_update_secret "DATABASE_URL" "$DATABASE_URL"
+create_or_update_secret "CM_DATABASE_URL" "$CM_DATABASE_URL"
 create_or_update_secret "JWT_ACCESS_SECRET" "$JWT_ACCESS"
 create_or_update_secret "JWT_REFRESH_SECRET" "$JWT_REFRESH"
 
@@ -59,7 +59,7 @@ PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(project
 RUN_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
 echo "Granting Secret Manager access to $RUN_SA"
-for SECRET in DATABASE_URL JWT_ACCESS_SECRET JWT_REFRESH_SECRET; do
+for SECRET in CM_DATABASE_URL JWT_ACCESS_SECRET JWT_REFRESH_SECRET; do
   gcloud secrets add-iam-policy-binding "$SECRET" \
     --project="$PROJECT_ID" \
     --member="serviceAccount:${RUN_SA}" \
@@ -75,7 +75,7 @@ gcloud run services update "$SERVICE" \
   --port=8080 \
   --startup-probe=initialDelaySeconds=15,timeoutSeconds=5,periodSeconds=10,failureThreshold=12,httpGet.path=/api/v1/health,httpGet.port=8080 \
   --set-env-vars="NODE_ENV=production,API_PREFIX=api/v1,API_URL=${API_URL}/api/v1,ADMIN_URL=${ADMIN_URL},WEB_URL=https://consent-management-web-414895350436.us-central1.run.app,EMAIL_VERIFICATION_ENABLED=false,DOMAIN_AUTO_VERIFY=false,AUTH0_DOMAIN=dev-varnarc.us.auth0.com,AUTH0_AUDIENCE=https://api.consent-management.varnarc.com,AUTH0_ISSUER_URL=https://dev-varnarc.us.auth0.com/" \
-  --set-secrets="DATABASE_URL=DATABASE_URL:latest,JWT_ACCESS_SECRET=JWT_ACCESS_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest"
+  --set-secrets="CM_DATABASE_URL=CM_DATABASE_URL:latest,JWT_ACCESS_SECRET=JWT_ACCESS_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest"
 
 echo ""
 echo "Done. Test:"
