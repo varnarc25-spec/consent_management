@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
+import { LoadingScreen } from '@/components/loading-screen';
 import { apiFetch } from '@/lib/api';
 
 interface Domain {
@@ -152,7 +153,7 @@ export default function DomainDetailPage() {
   if (!domain) {
     return (
       <ProtectedLayout>
-        <p>Loading domain...</p>
+        <LoadingScreen message="Loading domain…" inline />
       </ProtectedLayout>
     );
   }

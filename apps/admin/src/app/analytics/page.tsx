@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ProtectedLayout } from '@/components/protected-layout';
+import { InlineLoading } from '@/components/loading-screen';
 import { apiFetch } from '@/lib/api';
 
 interface Domain {
@@ -184,7 +185,7 @@ export default function AnalyticsPage() {
             />
           </>
         ) : (
-          <p>Loading…</p>
+          <InlineLoading />
         )}
       </div>
 
@@ -202,7 +203,7 @@ export default function AnalyticsPage() {
             <BarChart items={scans.byFindingType.map((r) => ({ type: r.type, count: r.count }))} labelKey="type" valueKey="count" />
           </>
         ) : (
-          <p>Loading…</p>
+          <InlineLoading />
         )}
       </div>
     </ProtectedLayout>

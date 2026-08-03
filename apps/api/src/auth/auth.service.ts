@@ -114,7 +114,8 @@ export class AuthService {
       if (existing.deletedAt || existing.status === 'DISABLED' || existing.status === 'DELETED') {
         throw new ForbiddenException({ code: 'ACCOUNT_DISABLED', message: 'Account is disabled' });
       }
-      return this.toCurrentUser(existing);
+      const withRole = await this.ensureOrganizationRole(existing);
+      return this.toCurrentUser(withRole);
     }
 
     const { user } = await this.upsertAuth0User(this.claimsToProfile(claims));
@@ -219,7 +220,22 @@ export class AuthService {
       });
     }
 
-    return { user: refreshed, isNewUser };
+    const withRole = await this.ensureOrganizationRole(refreshed);
+    return { user: withRole, isNewUser };
+  }
+
+  /** Auth0 users linked to an org without a role cannot access protected APIs (403). */
+  private async ensureOrganizationRole(user: UserWithRoles): Promise<UserWithRoles> {
+    if (!user.organizationId || user.roles.length > 0) {
+      return user;
+    }
+    try {
+      await this.repos.users.assignRole(user.id, 'org_owner');
+    } catch {
+      // Roles may be missing if db:seed was not run in this environment.
+    }
+    const updated = await this.repos.users.findById(user.id);
+    return updated ?? user;
   }
 
   async login(
@@ -358,7 +374,8 @@ export class AuthService {
     if (!user || user.deletedAt) {
       throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'User not found' });
     }
-    return this.toCurrentUser(user);
+    const withRole = await this.ensureOrganizationRole(user);
+    return this.toCurrentUser(withRole);
   }
 
   async getLoginHistory(userId: string, limit = 50) {

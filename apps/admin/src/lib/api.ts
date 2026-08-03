@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from '@/lib/runtime-public-env';
 import type { ApiResult } from '@cmp/utils';
+import { startLoading, stopLoading } from '@/lib/loading-store';
 
 export { getApiBaseUrl, getRuntimePublicEnvScript } from '@/lib/runtime-public-env';
 
@@ -31,6 +32,18 @@ async function getClientAccessToken(forceRefresh = false): Promise<string | null
 }
 
 export async function apiFetch<T>(
+  path: string,
+  options: RequestInit & { accessToken?: string; skipAuth?: boolean } = {},
+): Promise<ApiResult<T>> {
+  startLoading();
+  try {
+    return await apiFetchInternal<T>(path, options);
+  } finally {
+    stopLoading();
+  }
+}
+
+async function apiFetchInternal<T>(
   path: string,
   options: RequestInit & { accessToken?: string; skipAuth?: boolean } = {},
 ): Promise<ApiResult<T>> {

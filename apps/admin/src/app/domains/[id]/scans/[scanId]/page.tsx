@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
+import { LoadingScreen } from '@/components/loading-screen';
 import { apiFetch } from '@/lib/api';
 
 interface ScanDetail {
@@ -123,7 +124,7 @@ export default function ScanDetailPage() {
   if (!scan) {
     return (
       <ProtectedLayout>
-        <p role="status">Loading scan…</p>
+        <LoadingScreen message="Loading scan…" inline />
       </ProtectedLayout>
     );
   }

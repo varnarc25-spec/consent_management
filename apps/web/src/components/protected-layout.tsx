@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { CurrentUser } from '@cmp/types';
 import { apiFetch } from '@/lib/api';
 import { UserShell } from '@/components/user-shell';
+import { LoadingScreen } from '@/components/loading-screen';
 
 export function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -39,11 +40,7 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   if (loading || !user) {
-    return (
-      <div className="container">
-        <p role="status">Loading...</p>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   return <UserShell user={user}>{children}</UserShell>;

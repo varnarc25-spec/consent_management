@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
+import { LoadingScreen } from '@/components/loading-screen';
 import { apiFetch } from '@/lib/api';
 
 interface Domain {
@@ -160,7 +161,7 @@ export default function DomainDetailPage() {
   return (
     <ProtectedLayout>
       {loading ? (
-        <p role="status">Loading website…</p>
+        <LoadingScreen message="Loading website…" inline />
       ) : !domain ? (
         <div className="card">
           <p className="error">{error || 'Website not found.'}</p>

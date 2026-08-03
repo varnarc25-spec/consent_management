@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
+import { LoadingScreen } from '@/components/loading-screen';
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
@@ -58,7 +59,7 @@ function VerifyEmailContent() {
 
 export default function VerifyEmailPage() {
   return (
-    <Suspense fallback={<div className="container"><p>Loading...</p></div>}>
+    <Suspense fallback={<LoadingScreen />}>
       <VerifyEmailContent />
     </Suspense>
   );

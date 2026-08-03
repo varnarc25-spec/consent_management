@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
+import { LoadingScreen } from '@/components/loading-screen';
 import { apiFetch } from '@/lib/api';
 
 interface Organization {
@@ -176,7 +177,7 @@ export default function OnboardingPage() {
   if (loading) {
     return (
       <ProtectedLayout>
-        <p role="status">Loading onboarding…</p>
+        <LoadingScreen message="Loading onboarding…" inline />
       </ProtectedLayout>
     );
   }

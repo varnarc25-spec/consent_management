@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
+import { InlineLoading } from '@/components/loading-screen';
 import { apiFetch } from '@/lib/api';
 
 interface Violation {
@@ -87,7 +88,7 @@ export default function DomainBlockingPage() {
       <div className="card" style={{ marginTop: '1.5rem' }}>
         <h3>Blocking rules</h3>
         {!rules ? (
-          <p>Loading rules…</p>
+          <InlineLoading />
         ) : (
           <>
             <h4>Category mappings</h4>

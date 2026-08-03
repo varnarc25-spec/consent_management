@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
+import { LoadingScreen } from '@/components/loading-screen';
 import { apiFetch, getApiUrl } from '@/lib/api';
 
 interface PolicySnapshotBanner {
@@ -87,7 +88,7 @@ export default function ConsentProofPage() {
   if (!proof) {
     return (
       <ProtectedLayout>
-        <p style={{ color: 'var(--muted)' }}>Loading consent proof…</p>
+        <LoadingScreen message="Loading consent proof…" inline />
       </ProtectedLayout>
     );
   }

@@ -74,7 +74,7 @@ create_or_update_secret "AUTH0_SECRET" "$AUTH0_SECRET"
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
 RUN_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
-for SECRET in CM_AUTH0_CLIENT_ID CM_AUTH0_CLIENT_SECRET AUTH0_SECRET; do
+for SECRET in CM_AUTH0_CLIENT_ID CM_AUTH0_CLIENT_SECRET AUTH0_SECRET AUTH0_CLIENT_SECRET; do
   gcloud secrets add-iam-policy-binding "$SECRET" \
     --project="$PROJECT_ID" \
     --member="serviceAccount:${RUN_SA}" \

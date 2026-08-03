@@ -5,6 +5,7 @@ import type { CurrentUser } from '@cmp/types';
 import { apiFetch } from '@/lib/api';
 import { getWebUrl } from '@/lib/web-url';
 import { AdminShell } from '@/components/admin-shell';
+import { LoadingScreen } from '@/components/loading-screen';
 
 export function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
@@ -39,11 +40,7 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   if (loading || !user) {
-    return (
-      <div className="container">
-        <p role="status">Loading...</p>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   return <AdminShell user={user}>{children}</AdminShell>;

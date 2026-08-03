@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { ProtectedLayout } from '@/components/protected-layout';
+import { LoadingScreen } from '@/components/loading-screen';
 import { apiFetch } from '@/lib/api';
 import { getWebUrl } from '@/lib/web-url';
 
@@ -106,7 +107,7 @@ export default function OrganizationPage() {
   if (loading) {
     return (
       <ProtectedLayout>
-        <p role="status">Loading organization...</p>
+        <LoadingScreen message="Loading organization…" inline />
       </ProtectedLayout>
     );
   }

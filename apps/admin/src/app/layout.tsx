@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getRuntimePublicEnvScript } from '@/lib/runtime-public-env';
+import { AppProviders } from '@/components/app-providers';
 import './globals.css';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <AppProviders>{children}</AppProviders>
+      </body>
     </html>
   );
 }
