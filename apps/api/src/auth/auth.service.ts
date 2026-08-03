@@ -128,7 +128,7 @@ export class AuthService {
   ): Promise<CurrentUser> {
     const profile = this.claimsToProfile(claims);
     const { user } = await this.upsertAuth0User(profile, meta);
-    return this.toCurrentUser(user);
+    return this.getCurrentUser(user.id);
   }
 
   private claimsToProfile(claims: Auth0TokenClaims) {
@@ -226,14 +226,25 @@ export class AuthService {
 
   /** Auth0 users linked to an org without a role cannot access protected APIs (403). */
   private async ensureOrganizationRole(user: UserWithRoles): Promise<UserWithRoles> {
-    if (!user.organizationId || user.roles.length > 0) {
+    if (!user.organizationId) {
       return user;
     }
+
+    const permissionCount = user.roles.reduce(
+      (sum, ur) => sum + ur.role.permissions.length,
+      0,
+    );
+
+    if (user.roles.length > 0 && permissionCount > 0) {
+      return user;
+    }
+
     try {
       await this.repos.users.assignRole(user.id, 'org_owner');
-    } catch {
-      // Roles may be missing if db:seed was not run in this environment.
+    } catch (err) {
+      console.error('[auth] Failed to assign org_owner role:', err);
     }
+
     const updated = await this.repos.users.findById(user.id);
     return updated ?? user;
   }

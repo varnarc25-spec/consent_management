@@ -21,13 +21,11 @@ export class ScansController {
   constructor(private readonly scansService: ScansService) {}
 
   @Get()
-  @RequirePermissions(PERMISSIONS.SCAN_VIEW)
   list(@CurrentUserDecorator() user: CurrentUser, @Param('domainId') domainId: string) {
     return this.scansService.list(user, domainId).then(ok);
   }
 
   @Get(':scanId')
-  @RequirePermissions(PERMISSIONS.SCAN_VIEW)
   get(
     @CurrentUserDecorator() user: CurrentUser,
     @Param('domainId') domainId: string,
@@ -37,7 +35,7 @@ export class ScansController {
   }
 
   @Post()
-  @RequirePermissions(PERMISSIONS.SCAN_RUN)
+  @RequirePermissions(PERMISSIONS.SCAN_RUN, PERMISSIONS.DOMAIN_MANAGE)
   start(
     @CurrentUserDecorator() user: CurrentUser,
     @Param('domainId') domainId: string,
@@ -50,7 +48,7 @@ export class ScansController {
   }
 
   @Post(':scanId/retry')
-  @RequirePermissions(PERMISSIONS.SCAN_RUN)
+  @RequirePermissions(PERMISSIONS.SCAN_RUN, PERMISSIONS.DOMAIN_MANAGE)
   retry(
     @CurrentUserDecorator() user: CurrentUser,
     @Param('domainId') domainId: string,

@@ -52,6 +52,16 @@ async function parseApiResponse<T>(response: Response): Promise<ApiResult<T>> {
     };
   }
 
+  if (response.status === 403) {
+    return {
+      ok: false,
+      error: {
+        code: 'FORBIDDEN',
+        message: 'You do not have permission for this action. Try signing out and back in.',
+      },
+    };
+  }
+
   if (response.status === 204 || response.status === 304) {
     return {
       ok: false,
