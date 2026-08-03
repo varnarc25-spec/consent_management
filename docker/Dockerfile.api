@@ -48,14 +48,11 @@ COPY --chown=nestjs:nodejs deploy/migrate.sh ./deploy/migrate.sh
 COPY --chown=nestjs:nodejs deploy/start-api.sh ./start-api.sh
 RUN chmod +x ./deploy/migrate.sh ./start-api.sh
 
-# Regenerate Prisma for Debian (builder uses Alpine musl binaries).
-# Install Playwright Chromium + OS libs for website scans.
-RUN SCHEMA="$(find /app/node_modules -path '*/@cmp/database/prisma/schema.prisma' -print -quit)" && \
-    test -n "$SCHEMA" && \
-    npx prisma generate --schema="$SCHEMA" && \
-    npx playwright install-deps chromium && \
-    npx playwright install chromium && \
-    chown -R nestjs:nodejs /app/node_modules/.prisma /ms-playwright
+# Prisma client is generated in the builder (includes debian-openssl-3.0.x binary).
+# Install Playwright Chromium + OS libs for website scans (use local playwright pkg, not npx).
+RUN node ./node_modules/playwright/cli.js install-deps chromium && \
+    node ./node_modules/playwright/cli.js install chromium && \
+    chown -R nestjs:nodejs /ms-playwright
 
 USER nestjs
 EXPOSE 8080
