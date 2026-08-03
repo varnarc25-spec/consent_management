@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CurrentUser } from '@cmp/types';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, ensureApiSession } from '@/lib/api';
 import { UserShell } from '@/components/user-shell';
 import { LoadingScreen } from '@/components/loading-screen';
 
@@ -14,7 +14,11 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function load() {
-      await fetch('/api/auth/sync', { method: 'POST', credentials: 'include' });
+      const sessionOk = await ensureApiSession();
+      if (!sessionOk) {
+        window.location.assign('/auth/login');
+        return;
+      }
 
       const [result, authConfig] = await Promise.all([
         apiFetch<CurrentUser>('/auth/me'),

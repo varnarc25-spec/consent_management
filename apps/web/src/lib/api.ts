@@ -7,11 +7,12 @@ export { getApiBaseUrl, getRuntimePublicEnvScript } from '@/lib/runtime-public-e
 let cachedClientToken: string | null = null;
 let cachedClientTokenAt = 0;
 
-async function syncAuthSession(): Promise<void> {
+async function syncAuthSession(): Promise<boolean> {
   try {
-    await fetch('/api/auth/sync', { method: 'POST', credentials: 'include' });
+    const res = await fetch('/api/auth/sync', { method: 'POST', credentials: 'include' });
+    return res.ok;
   } catch {
-    // Ignore — access-token may still work via refresh or Auth0 session.
+    return false;
   }
 }
 
@@ -20,8 +21,17 @@ async function getClientAccessToken(forceRefresh = false): Promise<string | null
     return cachedClientToken;
   }
   try {
-    const res = await fetch('/api/auth/access-token', { credentials: 'include' });
-    if (!res.ok) return null;
+    const res = await fetch('/api/auth/access-token', {
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      if (!forceRefresh) {
+        await syncAuthSession();
+        return getClientAccessToken(true);
+      }
+      return null;
+    }
     const json = (await res.json()) as { accessToken?: string };
     cachedClientToken = json.accessToken ?? null;
     cachedClientTokenAt = Date.now();
@@ -29,6 +39,57 @@ async function getClientAccessToken(forceRefresh = false): Promise<string | null
   } catch {
     return null;
   }
+}
+
+async function parseApiResponse<T>(response: Response): Promise<ApiResult<T>> {
+  if (response.status === 401) {
+    return {
+      ok: false,
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Session expired. Please sign in again.',
+      },
+    };
+  }
+
+  if (response.status === 204 || response.status === 304) {
+    return {
+      ok: false,
+      error: {
+        code: 'EMPTY_RESPONSE',
+        message: 'Unexpected empty API response. Refresh the page and try again.',
+      },
+    };
+  }
+
+  const text = await response.text();
+  if (!text.trim()) {
+    return {
+      ok: false,
+      error: {
+        code: 'EMPTY_RESPONSE',
+        message: 'Empty API response.',
+      },
+    };
+  }
+
+  try {
+    return JSON.parse(text) as ApiResult<T>;
+  } catch {
+    return {
+      ok: false,
+      error: {
+        code: 'INVALID_JSON',
+        message: 'Invalid API response.',
+      },
+    };
+  }
+}
+
+export async function ensureApiSession(): Promise<boolean> {
+  await syncAuthSession();
+  const token = await getClientAccessToken(true);
+  return Boolean(token);
 }
 
 export async function apiFetch<T>(
@@ -58,6 +119,7 @@ async function apiFetchInternal<T>(
   const doFetch = (bearer?: string) =>
     fetch(`${apiUrl}${path}`, {
       ...rest,
+      cache: 'no-store',
       headers: {
         'Content-Type': 'application/json',
         ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
@@ -98,7 +160,7 @@ async function apiFetchInternal<T>(
     }
   }
 
-  return response.json() as Promise<ApiResult<T>>;
+  return parseApiResponse<T>(response);
 }
 
 export function getApiUrl(): string {

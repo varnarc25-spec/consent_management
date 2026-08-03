@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, ensureApiSession } from '@/lib/api';
 
 interface Domain {
   id: string;
@@ -35,19 +35,29 @@ export default function WebsiteScansPage() {
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const scansRef = useRef<ScanSummary[]>([]);
 
-  function load() {
-    apiFetch<Domain>(`/domains/${domainId}`).then((r) => {
-      if (r.data) setDomain(r.data);
-    });
-    apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`).then((r) => {
-      if (r.data) setScans(r.data);
-    });
+  async function load() {
+    const domainResult = await apiFetch<Domain>(`/domains/${domainId}`);
+    if (domainResult.data) {
+      setDomain(domainResult.data);
+    } else if (domainResult.error?.code === 'UNAUTHORIZED') {
+      setError('Session expired. Please sign in again.');
+    }
+    const scansResult = await apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`);
+    if (scansResult.data) {
+      setScans(scansResult.data);
+      scansRef.current = scansResult.data;
+    }
   }
 
   useEffect(() => {
     load();
-    const timer = window.setInterval(load, 5000);
+    const timer = window.setInterval(() => {
+      if (scansRef.current.some((s) => s.status === 'RUNNING')) {
+        load();
+      }
+    }, 5000);
     return () => window.clearInterval(timer);
   }, [domainId]);
 
@@ -55,6 +65,12 @@ export default function WebsiteScansPage() {
     setStarting(true);
     setMessage('');
     setError('');
+    const sessionOk = await ensureApiSession();
+    if (!sessionOk) {
+      setStarting(false);
+      setError('Session expired. Please sign in again.');
+      return;
+    }
     const result = await apiFetch<ScanSummary>(`/domains/${domainId}/scans`, {
       method: 'POST',
       body: JSON.stringify({
@@ -78,6 +94,12 @@ export default function WebsiteScansPage() {
     setRetryingId(scanId);
     setMessage('');
     setError('');
+    const sessionOk = await ensureApiSession();
+    if (!sessionOk) {
+      setRetryingId(null);
+      setError('Session expired. Please sign in again.');
+      return;
+    }
     const result = await apiFetch<ScanSummary>(`/domains/${domainId}/scans/${scanId}/retry`, {
       method: 'POST',
     });
