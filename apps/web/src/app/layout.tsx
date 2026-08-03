@@ -8,6 +8,10 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: 'CMP — Consent Management Platform',
   description: 'Enterprise consent management for cookies, trackers, and privacy compliance.',
+  icons: {
+    icon: [{ url: '/favicon.ico', sizes: 'any' }, { url: '/favicon.svg', type: 'image/svg+xml' }],
+    shortcut: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
