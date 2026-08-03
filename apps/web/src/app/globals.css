@@ -819,6 +819,14 @@ code {
 .site-header a.btn { color: white; }
 .site-header a.btn:hover { color: white; }
 
+.site-header .profile-menu {
+  margin-left: 0.25rem;
+}
+
+.site-header .profile-menu-trigger {
+  background: var(--surface);
+}
+
 @media (max-width: 900px) {
   .panel-grid {
     grid-template-columns: 1fr;
