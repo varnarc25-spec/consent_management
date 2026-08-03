@@ -12,6 +12,8 @@ export function LoadingSpinner({
       src={LOADING_IMAGE}
       alt=""
       aria-hidden="true"
+      width={80}
+      height={80}
       className={`loading-spinner-img loading-spinner-img-${size}${className ? ` ${className}` : ''}`}
     />
   );

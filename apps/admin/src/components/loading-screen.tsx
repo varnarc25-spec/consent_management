@@ -9,7 +9,7 @@ export function InlineLoading() {
 }
 
 export function LoadingScreen({
-  message = 'Loading...',
+  message,
   inline = false,
 }: {
   message?: string;
@@ -20,6 +20,7 @@ export function LoadingScreen({
       className={inline ? 'loading-screen loading-screen-inline' : 'loading-screen'}
       role="status"
       aria-live="polite"
+      aria-label={message ?? 'Loading'}
     >
       <div className="loading-screen-content">
         <LoadingSpinner size="lg" />
