@@ -16,7 +16,12 @@ export function getAuth0ClientId(
 export function getAuth0ClientSecret(
   env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
 ): string | undefined {
-  return env.CM_AUTH0_CLIENT_SECRET?.trim() || env.AUTH0_CLIENT_SECRET?.trim() || undefined;
+  return (
+    env.CM_AUTH0_CLIENT_SECRET?.trim() ||
+    env.AUTH0_CLIENT_SECRET?.trim() ||
+    env.cm_auth0_client_secret?.trim() ||
+    undefined
+  );
 }
 
 export function isAuth0Configured(
