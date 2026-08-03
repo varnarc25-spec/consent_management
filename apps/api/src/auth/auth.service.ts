@@ -422,7 +422,9 @@ export class AuthService {
       ),
     );
     for (const assignment of user.customRoles ?? []) {
-      for (const permission of assignment.customRole.permissions) {
+      const customPermissions = assignment.customRole?.permissions;
+      if (!Array.isArray(customPermissions)) continue;
+      for (const permission of customPermissions) {
         permissions.add(permission as PermissionSlug);
       }
     }

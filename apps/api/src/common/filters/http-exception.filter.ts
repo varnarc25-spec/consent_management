@@ -40,8 +40,21 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       ok: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Internal server error' },
+      error: {
+        code: 'INTERNAL_ERROR',
+        message:
+          process.env.NODE_ENV === 'production'
+            ? 'Internal server error'
+            : exception instanceof Error
+              ? exception.message
+              : 'Internal server error',
+      },
       requestId,
     });
+    if (exception instanceof Error) {
+      console.error('[cmp-api] Unhandled error:', exception.message, exception.stack);
+    } else {
+      console.error('[cmp-api] Unhandled error:', exception);
+    }
   }
 }
