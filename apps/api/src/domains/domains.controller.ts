@@ -18,22 +18,32 @@ import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { CurrentUserDecorator } from '../auth/decorators/current-user.decorator';
 import { DomainsService } from './domains.service';
 
+/** Any org member who uses the web portal or admin can list/read domains. */
+const DOMAIN_READ_PERMISSIONS = [
+  PERMISSIONS.DOMAIN_MANAGE,
+  PERMISSIONS.BANNER_CONFIGURE,
+  PERMISSIONS.CONSENT_VIEW,
+  PERMISSIONS.SCAN_VIEW,
+] as const;
+
 @Controller('domains')
-@RequirePermissions(PERMISSIONS.DOMAIN_MANAGE)
 export class DomainsController {
   constructor(private readonly domainsService: DomainsService) {}
 
   @Get()
+  @RequirePermissions(...DOMAIN_READ_PERMISSIONS)
   list(@CurrentUserDecorator() user: CurrentUser) {
     return this.domainsService.list(user).then(ok);
   }
 
   @Get(':id')
+  @RequirePermissions(...DOMAIN_READ_PERMISSIONS)
   get(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: string) {
     return this.domainsService.get(user, id).then(ok);
   }
 
   @Post()
+  @RequirePermissions(PERMISSIONS.DOMAIN_MANAGE)
   create(
     @CurrentUserDecorator() user: CurrentUser,
     @Body(new ZodValidationPipe(createDomainSchema)) body: unknown,
@@ -45,6 +55,7 @@ export class DomainsController {
   }
 
   @Patch(':id')
+  @RequirePermissions(PERMISSIONS.DOMAIN_MANAGE)
   update(
     @CurrentUserDecorator() user: CurrentUser,
     @Param('id') id: string,
@@ -57,6 +68,7 @@ export class DomainsController {
   }
 
   @Delete(':id')
+  @RequirePermissions(PERMISSIONS.DOMAIN_MANAGE)
   remove(
     @CurrentUserDecorator() user: CurrentUser,
     @Param('id') id: string,
@@ -66,11 +78,13 @@ export class DomainsController {
   }
 
   @Get(':id/verification-instructions')
+  @RequirePermissions(...DOMAIN_READ_PERMISSIONS)
   instructions(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: string) {
     return this.domainsService.getVerificationInstructions(user, id).then(ok);
   }
 
   @Post(':id/verify')
+  @RequirePermissions(PERMISSIONS.DOMAIN_MANAGE)
   verify(
     @CurrentUserDecorator() user: CurrentUser,
     @Param('id') id: string,
@@ -81,11 +95,13 @@ export class DomainsController {
   }
 
   @Get(':id/installation-script')
+  @RequirePermissions(...DOMAIN_READ_PERMISSIONS)
   installScript(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: string) {
     return this.domainsService.getInstallScript(user, id).then(ok);
   }
 
   @Post(':id/validate-installation')
+  @RequirePermissions(PERMISSIONS.DOMAIN_MANAGE)
   validate(
     @CurrentUserDecorator() user: CurrentUser,
     @Param('id') id: string,
@@ -95,6 +111,7 @@ export class DomainsController {
   }
 
   @Get(':id/validation-history')
+  @RequirePermissions(...DOMAIN_READ_PERMISSIONS)
   history(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: string) {
     return this.domainsService.validationHistory(user, id).then(ok);
   }
