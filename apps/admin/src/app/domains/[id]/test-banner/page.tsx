@@ -269,3 +269,17 @@ export default function TestBannerPage() {
     </ProtectedLayout>
   );
 }
+
+declare global {
+  interface Window {
+    __CMP__?: {
+      showBanner?: () => void;
+      openPreferences?: () => void;
+      getConsent?: () => Record<string, boolean>;
+    };
+    __cmpInlineRan?: boolean;
+    CMP?: {
+      getConfig?: () => { region?: string; applicableRegulation?: string };
+    };
+  }
+}
