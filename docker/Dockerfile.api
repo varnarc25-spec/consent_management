@@ -30,12 +30,15 @@ RUN SCHEMA="$(find /prod/api/node_modules -path '*/@cmp/database/prisma/schema.p
     test -n "$SCHEMA" && \
     pnpm exec prisma generate --schema="$SCHEMA"
 
-FROM node:20-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-RUN apk add --no-cache openssl libc6-compat ca-certificates
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nestjs
@@ -44,6 +47,11 @@ COPY --from=builder --chown=nestjs:nodejs /prod/api ./
 COPY --chown=nestjs:nodejs deploy/migrate.sh ./deploy/migrate.sh
 COPY --chown=nestjs:nodejs deploy/start-api.sh ./start-api.sh
 RUN chmod +x ./deploy/migrate.sh ./start-api.sh
+
+# Website scanner needs headless Chromium + OS libraries (not bundled in the npm package).
+RUN npx playwright install-deps chromium && \
+    npx playwright install chromium && \
+    chown -R nestjs:nodejs /ms-playwright
 
 USER nestjs
 EXPOSE 8080
