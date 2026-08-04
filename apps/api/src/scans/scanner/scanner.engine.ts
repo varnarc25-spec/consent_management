@@ -32,11 +32,14 @@ export interface ScanRunResult {
 }
 
 async function loadPlaywright() {
+  if (!process.env.PLAYWRIGHT_BROWSERS_PATH && process.env.NODE_ENV === 'production') {
+    process.env.PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright';
+  }
   try {
     return await import('playwright');
   } catch {
     throw new Error(
-      'Playwright is not installed. Run: pnpm --filter @cmp/api exec playwright install chromium',
+      'Playwright is not installed. Local dev: pnpm --filter @cmp/api playwright:install. Cloud Run: redeploy API image with Playwright browsers.',
     );
   }
 }

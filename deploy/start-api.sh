@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 
+export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/ms-playwright}"
+
 echo "[cmp-api] Starting (PORT=${PORT:-8080})"
 
 missing=""
