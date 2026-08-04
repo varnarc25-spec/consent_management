@@ -104,7 +104,13 @@ export class DomainsService {
 
   async update(user: CurrentUser, id: string, input: Partial<CreateDomainInput>, meta: AuditMeta): Promise<DomainResponse> {
     const existing = await this.getDomainForUser(user, id);
-    const updated = await this.repos.domains.update(id, input);
+
+    let nextScanAt: Date | null | undefined;
+    if (input.scanFrequency && input.scanFrequency !== existing.scanFrequency) {
+      nextScanAt = nextScanAtFromFrequency(input.scanFrequency);
+    }
+
+    const updated = await this.repos.domains.update(id, { ...input, nextScanAt });
 
     await this.auditService.log({
       userId: user.id,
@@ -271,5 +277,19 @@ export class DomainsService {
     }
     assertSameOrganization(user, domain.organizationId);
     return domain;
+  }
+}
+
+export function nextScanAtFromFrequency(frequency: string): Date | null {
+  const now = Date.now();
+  switch (frequency) {
+    case 'DAILY':
+      return new Date(now + 24 * 60 * 60 * 1000);
+    case 'WEEKLY':
+      return new Date(now + 7 * 24 * 60 * 60 * 1000);
+    case 'MONTHLY':
+      return new Date(now + 30 * 24 * 60 * 60 * 1000);
+    default:
+      return null;
   }
 }

@@ -76,6 +76,15 @@ export class CookieRepository {
     });
   }
 
+  async countByCategory(domainId: string) {
+    const groups = await this.prisma.domainCookie.groupBy({
+      by: ['category'],
+      where: { domainId },
+      _count: { _all: true },
+    });
+    return groups.map((g) => ({ category: g.category, count: g._count._all }));
+  }
+
   findDomainCookieById(id: string) {
     return this.prisma.domainCookie.findUnique({
       where: { id },

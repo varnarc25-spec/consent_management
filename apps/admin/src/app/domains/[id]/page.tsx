@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
 import { LoadingScreen } from '@/components/loading-screen';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, getApiUrl } from '@/lib/api';
 
 interface Domain {
   id: string;
@@ -22,7 +22,24 @@ interface Domain {
   enabled: boolean;
   groupName: string | null;
   scanLimit: number;
+  scanFrequency: string;
+  nextScanAt: string | null;
   isProduction: boolean;
+}
+
+interface ScanSummary {
+  id: string;
+  status: string;
+  pagesScanned: number;
+  cookiesFound: number;
+  trackersFound: number;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+interface CookieCategorySummary {
+  total: number;
+  categories: Array<{ slug: string; name: string; count: number }>;
 }
 
 interface InstallData {
@@ -53,11 +70,15 @@ export default function DomainDetailPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [guide, setGuide] = useState('html');
+  const [scans, setScans] = useState<ScanSummary[]>([]);
+  const [cookieSummary, setCookieSummary] = useState<CookieCategorySummary | null>(null);
+  const [startingScan, setStartingScan] = useState(false);
   const [settings, setSettings] = useState({
     enabled: true,
     region: '',
     groupName: '',
     scanLimit: 10,
+    scanFrequency: 'MANUAL',
     autoBlocking: true,
     debugMode: false,
   });
@@ -71,6 +92,7 @@ export default function DomainDetailPage() {
           region: r.data.region ?? '',
           groupName: r.data.groupName ?? '',
           scanLimit: r.data.scanLimit,
+          scanFrequency: r.data.scanFrequency,
           autoBlocking: r.data.autoBlocking,
           debugMode: r.data.debugMode,
         });
@@ -84,8 +106,22 @@ export default function DomainDetailPage() {
     });
   }
 
+  function loadScans() {
+    apiFetch<ScanSummary[]>(`/domains/${id}/scans`).then((r) => {
+      if (r.data) setScans(r.data);
+    });
+  }
+
+  function loadCookieSummary() {
+    apiFetch<CookieCategorySummary>(`/domains/${id}/cookies/summary`).then((r) => {
+      if (r.data) setCookieSummary(r.data);
+    });
+  }
+
   useEffect(() => {
     loadDomain();
+    loadScans();
+    loadCookieSummary();
     loadHistory();
     apiFetch<Record<string, unknown>>(`/domains/${id}/verification-instructions`).then((r) => {
       if (r.data) setInstructions(r.data);
@@ -131,6 +167,7 @@ export default function DomainDetailPage() {
         region: settings.region || undefined,
         groupName: settings.groupName || undefined,
         scanLimit: settings.scanLimit,
+        scanFrequency: settings.scanFrequency,
         autoBlocking: settings.autoBlocking,
         debugMode: settings.debugMode,
       }),
@@ -141,6 +178,44 @@ export default function DomainDetailPage() {
     } else {
       setError(result.error?.message ?? 'Failed to save settings');
     }
+  }
+
+  async function startScanNow() {
+    if (!domain) return;
+    setStartingScan(true);
+    setMessage('');
+    setError('');
+    const result = await apiFetch<ScanSummary>(`/domains/${id}/scans`, {
+      method: 'POST',
+      body: JSON.stringify({
+        startUrl: `https://${domain.hostname}/`,
+        maxDepth: 2,
+        timeoutMs: 30000,
+        jsRendering: true,
+        deviceType: 'desktop',
+      }),
+    });
+    setStartingScan(false);
+    if (result.ok) {
+      setMessage('Scan started');
+      loadScans();
+    } else {
+      setError(result.error?.message ?? 'Failed to start scan');
+    }
+  }
+
+  async function downloadPagesCsv(scanId: string) {
+    const tokenRes = await fetch('/api/auth/access-token', { credentials: 'include' });
+    const tokenJson = (await tokenRes.json()) as { accessToken?: string };
+    const url = `${getApiUrl()}/domains/${id}/scans/${scanId}/export`;
+    const res = await fetch(url, {
+      headers: tokenJson.accessToken ? { Authorization: `Bearer ${tokenJson.accessToken}` } : {},
+    });
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${domain?.hostname ?? 'domain'}-scan-pages.csv`;
+    a.click();
   }
 
   function copySnippet() {
@@ -173,6 +248,79 @@ export default function DomainDetailPage() {
 
       {message && <p className="success">{message}</p>}
       {error && <p className="error">{error}</p>}
+
+      <div className="grid-2" style={{ marginTop: '1.5rem' }}>
+        <div className="card">
+          <h3>Status</h3>
+          <p style={{ fontSize: '0.875rem' }}>
+            <strong>Last scan:</strong>{' '}
+            {scans[0] ? `${scans[0].status} · ${new Date(scans[0].createdAt).toLocaleString()}` : 'No scans yet'}
+          </p>
+          <p style={{ fontSize: '0.875rem' }}>
+            <strong>Next scan:</strong>{' '}
+            {domain.nextScanAt ? new Date(domain.nextScanAt).toLocaleString() : 'Not scheduled'}
+          </p>
+          {(() => {
+            const lastCompleted = scans.find((s) => s.status === 'COMPLETED');
+            if (!lastCompleted) return null;
+            return (
+              <p style={{ fontSize: '0.875rem' }}>
+                <strong>Scanned subpages:</strong> {lastCompleted.pagesScanned}{' '}
+                <button
+                  className="btn-link"
+                  type="button"
+                  onClick={() => downloadPagesCsv(lastCompleted.id)}
+                >
+                  Download CSV
+                </button>
+              </p>
+            );
+          })()}
+        </div>
+
+        <div className="card">
+          <h3>Cookies and Trackers</h3>
+          <p style={{ fontSize: '0.875rem' }}><strong>Total:</strong> {cookieSummary?.total ?? 0}</p>
+          {cookieSummary?.categories.map((c) => (
+            <p key={c.slug} style={{ fontSize: '0.875rem', margin: '0.25rem 0' }}>
+              {c.name}: {c.count}
+            </p>
+          ))}
+          <Link href={`/domains/${id}/cookies`}>Manage cookies and trackers →</Link>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: '1.5rem', maxWidth: 640 }}>
+        <h3>Scan settings</h3>
+        <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
+          Choose how often {domain.hostname} should be scanned automatically, or start a scan now.
+        </p>
+        <form onSubmit={saveSettings}>
+          <div className="field">
+            <label htmlFor="scanFrequency">Scan frequency</label>
+            <select
+              id="scanFrequency"
+              value={settings.scanFrequency}
+              onChange={(e) => setSettings({ ...settings, scanFrequency: e.target.value })}
+            >
+              <option value="MANUAL">Manual</option>
+              <option value="DAILY">Daily</option>
+              <option value="WEEKLY">Weekly</option>
+              <option value="MONTHLY">Monthly</option>
+            </select>
+          </div>
+          <button className="btn btn-secondary" type="submit">Save frequency</button>
+        </form>
+        <button
+          className="btn"
+          style={{ marginTop: '1rem' }}
+          type="button"
+          disabled={startingScan}
+          onClick={startScanNow}
+        >
+          {startingScan ? 'Starting…' : 'Start domain scan now'}
+        </button>
+      </div>
 
       <div className="card" style={{ marginTop: '1.5rem', maxWidth: 640 }}>
         <h3>Domain settings</h3>

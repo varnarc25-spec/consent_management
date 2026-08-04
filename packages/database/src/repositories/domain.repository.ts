@@ -90,6 +90,17 @@ export class DomainRepository {
     return this.prisma.domain.update({ where: { id }, data });
   }
 
+  findDueForScan(now: Date) {
+    return this.prisma.domain.findMany({
+      where: {
+        enabled: true,
+        scanFrequency: { not: 'MANUAL' },
+        nextScanAt: { lte: now },
+        deletedAt: null,
+      },
+    });
+  }
+
   softDelete(id: string) {
     return this.prisma.domain.update({
       where: { id },

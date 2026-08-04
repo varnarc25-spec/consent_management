@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import type { Repositories } from '@cmp/database';
@@ -16,6 +17,7 @@ import { CookiesService } from '../cookies/cookies.service';
 import { WebhookDeliveryService } from '../webhooks/webhook-delivery.service';
 import { runWebsiteScan } from './scanner/scanner.engine';
 import { buildStartUrl } from './scanner/crawl.util';
+import { nextScanAtFromFrequency } from '../domains/domains.service';
 
 export interface ScanSummaryResponse {
   id: string;
@@ -71,6 +73,7 @@ export interface ScanDetailResponse extends ScanSummaryResponse {
 
 @Injectable()
 export class ScansService {
+  private readonly logger = new Logger(ScansService.name);
   private readonly activeScans = new Set<string>();
 
   constructor(
@@ -93,6 +96,25 @@ export class ScansService {
       throw new NotFoundException({ code: 'SCAN_NOT_FOUND', message: 'Scan not found' });
     }
     return this.toDetail(scan);
+  }
+
+  async exportPagesCsv(user: CurrentUser, domainId: string, scanId: string) {
+    const domain = await this.getDomainForUser(user, domainId);
+    const scan = await this.repos.scans.findById(scanId);
+    if (!scan || scan.domainId !== domain.id) {
+      throw new NotFoundException({ code: 'SCAN_NOT_FOUND', message: 'Scan not found' });
+    }
+
+    const header = 'url,status,depth,error_message\n';
+    const rows = scan.pages
+      .map((page) =>
+        [page.url, page.status, page.depth, page.errorMessage ?? '']
+          .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+          .join(','),
+      )
+      .join('\n');
+
+    return { hostname: domain.hostname, csv: header + rows };
   }
 
   async start(
@@ -207,6 +229,49 @@ export class ScansService {
       retriedFromScanId: scanId,
     });
     return this.toSummary(scan);
+  }
+
+  async runDueScans() {
+    const due = await this.repos.domains.findDueForScan(new Date());
+    for (const domain of due) {
+      try {
+        const running = await this.repos.scans.countRunningForDomain(domain.id);
+        if (running === 0) {
+          await this.start(
+            this.systemUser(domain.organizationId),
+            domain.id,
+            {
+              startUrl: buildStartUrl(domain.hostname),
+              maxDepth: 2,
+              timeoutMs: 30000,
+              jsRendering: true,
+              deviceType: 'desktop',
+            },
+            {},
+          );
+        }
+        await this.repos.domains.update(domain.id, {
+          nextScanAt: nextScanAtFromFrequency(domain.scanFrequency),
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Scheduled scan for domain ${domain.id} failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+  }
+
+  private systemUser(organizationId: string): CurrentUser {
+    return {
+      id: '00000000-0000-0000-0000-000000000001',
+      email: 'scheduler@internal.cmp',
+      firstName: 'Scan',
+      lastName: 'Scheduler',
+      emailVerified: true,
+      organizationId,
+      roles: ['org_admin'],
+      permissions: [],
+    };
   }
 
   private async processScan(scanId: string) {

@@ -10,6 +10,8 @@ export interface DomainResponse {
   enabled: boolean;
   groupName: string | null;
   scanLimit: number;
+  scanFrequency: string;
+  nextScanAt: Date | null;
   environment: string;
   region: string | null;
   autoBlocking: boolean;
@@ -37,6 +39,8 @@ export function toDomainResponse(domain: {
   enabled: boolean;
   groupName: string | null;
   scanLimit: number;
+  scanFrequency: string;
+  nextScanAt: Date | null;
   environment: string;
   region: string | null;
   autoBlocking: boolean;

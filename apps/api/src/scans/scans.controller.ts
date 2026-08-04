@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
-import type { Request } from 'express';
+import { Body, Controller, Get, Header, Param, Post, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { PERMISSIONS } from '@cmp/auth';
 import { createDomainScanSchema } from '@cmp/validation';
 import type { CurrentUser } from '@cmp/types';
@@ -32,6 +32,23 @@ export class ScansController {
     @Param('scanId') scanId: string,
   ) {
     return this.scansService.get(user, domainId, scanId).then(ok);
+  }
+
+  @Get(':scanId/export')
+  @RequirePermissions(PERMISSIONS.SCAN_VIEW)
+  @Header('Content-Type', 'text/csv')
+  async exportPages(
+    @CurrentUserDecorator() user: CurrentUser,
+    @Param('domainId') domainId: string,
+    @Param('scanId') scanId: string,
+    @Res() res: Response,
+  ) {
+    const { hostname, csv } = await this.scansService.exportPagesCsv(user, domainId, scanId);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${hostname}-scan-${scanId}-pages.csv"`,
+    );
+    res.send(csv);
   }
 
   @Post()

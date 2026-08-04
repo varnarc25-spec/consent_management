@@ -43,6 +43,39 @@ export class CookiesService {
     return cookies.map((item) => this.toDomainCookieResponse(item));
   }
 
+  async getCategorySummary(user: CurrentUser, domainId: string) {
+    const domain = await this.getDomainForUser(user, domainId);
+
+    let categories = await this.repos.consentCategories.listByDomain(domain.id);
+    if (categories.length === 0) {
+      categories = await this.repos.consentCategories.seedDefaults(domain.id, domain.organizationId);
+    }
+
+    const counts = await this.repos.cookies.countByCategory(domain.id);
+    const countBySlug = new Map<string, number>();
+    let unclassified = 0;
+    for (const { category, count } of counts) {
+      const slug = category?.trim().toLowerCase();
+      const matched = slug && categories.some((c) => c.slug === slug);
+      if (matched) {
+        countBySlug.set(slug!, (countBySlug.get(slug!) ?? 0) + count);
+      } else {
+        unclassified += count;
+      }
+    }
+
+    const summary = categories.map((c) => ({
+      slug: c.slug,
+      name: c.name,
+      count: (countBySlug.get(c.slug) ?? 0) + (c.slug === 'unclassified' ? unclassified : 0),
+    }));
+
+    return {
+      total: summary.reduce((sum, c) => sum + c.count, 0),
+      categories: summary,
+    };
+  }
+
   async reviewCookie(
     user: CurrentUser,
     domainId: string,

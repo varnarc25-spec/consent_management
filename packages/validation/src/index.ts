@@ -83,6 +83,7 @@ export const createDomainSchema = z.object({
   enabled: z.boolean().default(true),
   groupName: z.string().max(100).optional(),
   scanLimit: z.number().int().min(1).max(1000).default(10),
+  scanFrequency: z.enum(['MANUAL', 'DAILY', 'WEEKLY', 'MONTHLY']).default('MANUAL'),
   environment: z.string().max(50).default('production'),
   region: z.string().max(50).optional(),
   autoBlocking: z.boolean().default(true),

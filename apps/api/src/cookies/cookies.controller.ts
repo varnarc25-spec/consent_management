@@ -44,6 +44,15 @@ export class CookiesController {
     return this.cookiesService.listUnknown(user, domainId).then(ok);
   }
 
+  @Get('domains/:domainId/cookies/summary')
+  @RequirePermissions(PERMISSIONS.SCAN_VIEW)
+  getCategorySummary(
+    @CurrentUserDecorator() user: CurrentUser,
+    @Param('domainId') domainId: string,
+  ) {
+    return this.cookiesService.getCategorySummary(user, domainId).then(ok);
+  }
+
   @Patch('domains/:domainId/cookies/:cookieId')
   @RequirePermissions(PERMISSIONS.COOKIE_MANAGE)
   reviewCookie(

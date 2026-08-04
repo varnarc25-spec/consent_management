@@ -258,6 +258,15 @@ enum DomainVerificationMethod {
   @@map("domain_verification_method")
 }
 
+enum ScanFrequency {
+  MANUAL
+  DAILY
+  WEEKLY
+  MONTHLY
+
+  @@map("scan_frequency_type")
+}
+
 enum ValidationCheckStatus {
   PASS
   WARNING
@@ -276,6 +285,8 @@ model Domain {
   enabled            Boolean                  @default(true)
   groupName          String?                  @map("group_name")
   scanLimit          Int                      @default(10) @map("scan_limit")
+  scanFrequency      ScanFrequency            @default(MANUAL) @map("scan_frequency")
+  nextScanAt         DateTime?                @map("next_scan_at")
   environment        String                   @default("production")
   region             String?
   autoBlocking       Boolean                  @default(true) @map("auto_blocking")
