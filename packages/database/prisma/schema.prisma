@@ -650,7 +650,7 @@ model DomainCookie {
   cookieName         String              @map("cookie_name")
   cookieDomain       String?             @map("cookie_domain")
   provider           String?
-  providerDomain     String?
+  providerDomain     String?             @map("provider_domain")
   description        String?
   purpose            String?
   category           String?
