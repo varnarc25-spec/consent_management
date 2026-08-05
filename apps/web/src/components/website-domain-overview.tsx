@@ -12,6 +12,7 @@ interface ScanSummary {
   maxPages?: number;
   cookiesFound?: number;
   trackersFound?: number;
+  errorMessage?: string | null;
   completedAt: string | null;
   createdAt: string;
 }
