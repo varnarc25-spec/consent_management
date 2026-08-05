@@ -51,7 +51,7 @@ async function apiFetchInternal<T>(
   options: RequestInit & { accessToken?: string; skipAuth?: boolean; silent?: boolean } = {},
 ): Promise<ApiResult<T>> {
   const apiUrl = getApiBaseUrl();
-  const { accessToken, skipAuth, headers, ...rest } = options;
+  const { accessToken, skipAuth, silent: _silent, headers, ...rest } = options;
 
   let token = accessToken;
   if (!token && !skipAuth) {

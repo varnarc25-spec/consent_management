@@ -8,6 +8,9 @@ interface ScanSummary {
   id: string;
   status: string;
   pagesScanned: number;
+  maxPages?: number;
+  cookiesFound?: number;
+  trackersFound?: number;
   completedAt: string | null;
   createdAt: string;
 }
@@ -68,7 +71,9 @@ export function WebsiteDomainOverview({
 }: WebsiteDomainOverviewProps) {
   const [scans, setScans] = useState<ScanSummary[]>([]);
   const scansRef = useRef<ScanSummary[]>([]);
+  const pollTimerRef = useRef<number | null>(null);
   const [cookieSummary, setCookieSummary] = useState<CookieCategorySummary | null>(null);
+  const [summaryError, setSummaryError] = useState('');
   const [frequency, setFrequency] = useState(scanFrequency);
   const [startingScan, setStartingScan] = useState(false);
   const [message, setMessage] = useState('');
@@ -77,36 +82,62 @@ export function WebsiteDomainOverview({
     setFrequency(scanFrequency);
   }, [scanFrequency]);
 
-  function loadScans(silent = false) {
+  function loadScans(silent = true) {
     return apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`, { silent }).then((r) => {
       if (r.data) {
         setScans(r.data);
         scansRef.current = r.data;
       }
+      return r.data;
     });
   }
 
-  function loadCookieSummary(silent = false) {
-    return apiFetch<CookieCategorySummary>(`/domains/${domainId}/cookies/summary`, { silent }).then((r) => {
-      if (r.data) setCookieSummary(r.data);
-    });
+  function loadCookieSummary(silent = true) {
+    return apiFetch<CookieCategorySummary>(`/domains/${domainId}/cookies/summary`, { silent }).then(
+      (r) => {
+        if (r.data) {
+          setCookieSummary(r.data);
+          setSummaryError('');
+        } else if (r.error) {
+          setSummaryError(r.error.message);
+        }
+      },
+    );
+  }
+
+  function schedulePoll() {
+    if (pollTimerRef.current !== null) {
+      window.clearTimeout(pollTimerRef.current);
+    }
+    if (!scansRef.current.some((s) => s.status === 'RUNNING')) {
+      return;
+    }
+    pollTimerRef.current = window.setTimeout(async () => {
+      await Promise.all([loadScans(true), loadCookieSummary(true)]);
+      schedulePoll();
+    }, 3000);
   }
 
   useEffect(() => {
-    loadScans();
-    loadCookieSummary();
-    const timer = window.setInterval(() => {
-      if (scansRef.current.some((s) => s.status === 'RUNNING')) {
-        loadScans(true);
-        loadCookieSummary(true);
+    async function init() {
+      await Promise.all([loadScans(true), loadCookieSummary(true)]);
+      schedulePoll();
+    }
+    init();
+    return () => {
+      if (pollTimerRef.current !== null) {
+        window.clearTimeout(pollTimerRef.current);
       }
-    }, 3000);
-    return () => window.clearInterval(timer);
+    };
   }, [domainId]);
 
   const hasRunningScan = scans.some((s) => s.status === 'RUNNING');
+  const runningScan = scans.find((s) => s.status === 'RUNNING');
 
-  const lastCompletedScan = useMemo(() => scans.find((s) => s.status === 'COMPLETED'), [scans]);
+  const lastCompletedScan = useMemo(
+    () => scans.find((s) => s.status === 'COMPLETED'),
+    [scans],
+  );
 
   const sortedCategories = useMemo(() => {
     if (!cookieSummary) return [];
@@ -129,6 +160,8 @@ export function WebsiteDomainOverview({
     }
     return ordered;
   }, [cookieSummary]);
+
+  const categoriesWithCounts = sortedCategories.filter((c) => c.count > 0);
 
   async function startScan() {
     setStartingScan(true);
@@ -153,6 +186,7 @@ export function WebsiteDomainOverview({
     if (result.ok) {
       setMessage('Scan started');
       await loadScans(true);
+      schedulePoll();
     }
   }
 
@@ -174,7 +208,11 @@ export function WebsiteDomainOverview({
     <>
       {hasRunningScan && (
         <p className="success" role="status">
-          Scan in progress — overview updates automatically.
+          Scan in progress
+          {runningScan?.maxPages
+            ? ` (${runningScan.pagesScanned ?? 0}/${runningScan.maxPages} pages, ${runningScan.cookiesFound ?? 0} cookies, ${runningScan.trackersFound ?? 0} trackers)`
+            : ''}
+          — updates every few seconds.
         </p>
       )}
 
@@ -190,7 +228,7 @@ export function WebsiteDomainOverview({
               <span className="domain-stat-value">
                 {lastCompletedScan?.completedAt
                   ? formatScanDate(lastCompletedScan.completedAt)
-                  : scans.some((s) => s.status === 'RUNNING')
+                  : hasRunningScan
                     ? 'Running…'
                     : '—'}
               </span>
@@ -223,14 +261,25 @@ export function WebsiteDomainOverview({
           <div className="domain-panel">
             <h3>Cookies and Trackers</h3>
             <p className="domain-cookie-total">{cookieSummary?.total ?? 0}</p>
-            <ul className="domain-category-list">
-              {sortedCategories.map((c) => (
-                <li key={c.slug}>
-                  <span>{c.label}</span>
-                  <span>{c.count}</span>
-                </li>
-              ))}
-            </ul>
+            {summaryError && (
+              <p className="error" style={{ fontSize: '0.875rem' }}>{summaryError}</p>
+            )}
+            {categoriesWithCounts.length > 0 ? (
+              <ul className="domain-category-list">
+                {categoriesWithCounts.map((c) => (
+                  <li key={c.slug}>
+                    <span>{c.label}</span>
+                    <span>{c.count}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
+                {hasRunningScan
+                  ? 'Waiting for scan results…'
+                  : 'No cookies or trackers in inventory yet. Run a domain scan below.'}
+              </p>
+            )}
             <Link className="domain-panel-link" href={`/websites/${domainId}/scans`}>
               View scans and cookie findings →
             </Link>
@@ -265,7 +314,12 @@ export function WebsiteDomainOverview({
           </div>
           <div className="domain-panel domain-scan-now-card">
             <p>Scan your domain now</p>
-            <button className="btn" type="button" disabled={startingScan || hasRunningScan} onClick={startScan}>
+            <button
+              className="btn"
+              type="button"
+              disabled={startingScan || hasRunningScan}
+              onClick={startScan}
+            >
               {startingScan ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Start domain scan'}
             </button>
           </div>

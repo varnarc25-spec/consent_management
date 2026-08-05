@@ -60,13 +60,31 @@ export class ScanRepository {
     });
   }
 
-  async expireStaleRunningScans(domainId?: string, maxAgeMs = 2 * 60 * 60 * 1000) {
+  async expireStaleRunningScans(domainId?: string, maxAgeMs = 30 * 60 * 1000) {
+    const zeroProgressCutoff = new Date(Date.now() - 10 * 60 * 1000);
     const cutoff = new Date(Date.now() - maxAgeMs);
+    const domainFilter = domainId ? { domainId } : {};
+
+    await this.prisma.domainScan.updateMany({
+      where: {
+        status: 'RUNNING',
+        pagesScanned: 0,
+        startedAt: { lt: zeroProgressCutoff },
+        ...domainFilter,
+      },
+      data: {
+        status: 'FAILED',
+        errorMessage:
+          'Scan timed out with no pages crawled (server may have restarted). Start a new scan.',
+        completedAt: new Date(),
+      },
+    });
+
     const stale = await this.prisma.domainScan.findMany({
       where: {
         status: 'RUNNING',
         startedAt: { lt: cutoff },
-        ...(domainId ? { domainId } : {}),
+        ...domainFilter,
       },
       select: { id: true, startedAt: true },
     });

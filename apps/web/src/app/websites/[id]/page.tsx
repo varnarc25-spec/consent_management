@@ -88,7 +88,7 @@ export default function DomainDetailPage() {
   }
 
   function loadHistory() {
-    apiFetch<HistoryItem[]>(`/domains/${id}/validation-history`).then((r) => {
+    apiFetch<HistoryItem[]>(`/domains/${id}/validation-history`, { silent: true }).then((r) => {
       if (r.data) setHistory(r.data);
     });
   }
@@ -100,10 +100,12 @@ export default function DomainDetailPage() {
       await fetch('/api/auth/sync', { method: 'POST', credentials: 'include' });
       await loadDomain();
       loadHistory();
-      apiFetch<Record<string, unknown>>(`/domains/${id}/verification-instructions`).then((r) => {
+      apiFetch<Record<string, unknown>>(`/domains/${id}/verification-instructions`, {
+        silent: true,
+      }).then((r) => {
         if (r.data) setInstructions(r.data);
       });
-      apiFetch<InstallData>(`/domains/${id}/installation-script`).then((r) => {
+      apiFetch<InstallData>(`/domains/${id}/installation-script`, { silent: true }).then((r) => {
         if (r.data) setInstall(r.data);
       });
       setLoading(false);
