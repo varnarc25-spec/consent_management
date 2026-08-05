@@ -77,8 +77,8 @@ export function WebsiteDomainOverview({
     setFrequency(scanFrequency);
   }, [scanFrequency]);
 
-  function loadScans() {
-    apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`).then((r) => {
+  function loadScans(silent = false) {
+    return apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`, { silent }).then((r) => {
       if (r.data) {
         setScans(r.data);
         scansRef.current = r.data;
@@ -86,8 +86,8 @@ export function WebsiteDomainOverview({
     });
   }
 
-  function loadCookieSummary() {
-    apiFetch<CookieCategorySummary>(`/domains/${domainId}/cookies/summary`).then((r) => {
+  function loadCookieSummary(silent = false) {
+    return apiFetch<CookieCategorySummary>(`/domains/${domainId}/cookies/summary`, { silent }).then((r) => {
       if (r.data) setCookieSummary(r.data);
     });
   }
@@ -97,12 +97,14 @@ export function WebsiteDomainOverview({
     loadCookieSummary();
     const timer = window.setInterval(() => {
       if (scansRef.current.some((s) => s.status === 'RUNNING')) {
-        loadScans();
-        loadCookieSummary();
+        loadScans(true);
+        loadCookieSummary(true);
       }
-    }, 5000);
+    }, 3000);
     return () => window.clearInterval(timer);
   }, [domainId]);
+
+  const hasRunningScan = scans.some((s) => s.status === 'RUNNING');
 
   const lastCompletedScan = useMemo(() => scans.find((s) => s.status === 'COMPLETED'), [scans]);
 
@@ -150,7 +152,7 @@ export function WebsiteDomainOverview({
     setStartingScan(false);
     if (result.ok) {
       setMessage('Scan started');
-      loadScans();
+      await loadScans(true);
     }
   }
 
@@ -170,6 +172,12 @@ export function WebsiteDomainOverview({
 
   return (
     <>
+      {hasRunningScan && (
+        <p className="success" role="status">
+          Scan in progress — overview updates automatically.
+        </p>
+      )}
+
       {message && <p className="success">{message}</p>}
 
       <section className="domain-section">
@@ -257,8 +265,8 @@ export function WebsiteDomainOverview({
           </div>
           <div className="domain-panel domain-scan-now-card">
             <p>Scan your domain now</p>
-            <button className="btn" type="button" disabled={startingScan} onClick={startScan}>
-              {startingScan ? 'Starting…' : 'Start domain scan'}
+            <button className="btn" type="button" disabled={startingScan || hasRunningScan} onClick={startScan}>
+              {startingScan ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Start domain scan'}
             </button>
           </div>
         </div>

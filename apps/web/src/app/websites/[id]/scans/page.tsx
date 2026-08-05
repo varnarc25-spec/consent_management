@@ -31,33 +31,40 @@ export default function WebsiteScansPage() {
   const domainId = params.id as string;
   const [domain, setDomain] = useState<Domain | null>(null);
   const [scans, setScans] = useState<ScanSummary[]>([]);
+  const scansRef = useRef<ScanSummary[]>([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
-  const scansRef = useRef<ScanSummary[]>([]);
 
-  async function load() {
+  function loadScans(silent = false) {
+    return apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`, { silent }).then((r) => {
+      if (r.data) {
+        setScans(r.data);
+        scansRef.current = r.data;
+      } else if (r.error?.code === 'UNAUTHORIZED') {
+        setError('Session expired. Please sign in again.');
+      }
+    });
+  }
+
+  async function loadInitial() {
     const domainResult = await apiFetch<Domain>(`/domains/${domainId}`);
     if (domainResult.data) {
       setDomain(domainResult.data);
     } else if (domainResult.error?.code === 'UNAUTHORIZED') {
       setError('Session expired. Please sign in again.');
     }
-    const scansResult = await apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`);
-    if (scansResult.data) {
-      setScans(scansResult.data);
-      scansRef.current = scansResult.data;
-    }
+    await loadScans();
   }
 
   useEffect(() => {
-    load();
+    loadInitial();
     const timer = window.setInterval(() => {
       if (scansRef.current.some((s) => s.status === 'RUNNING')) {
-        load();
+        loadScans(true);
       }
-    }, 5000);
+    }, 3000);
     return () => window.clearInterval(timer);
   }, [domainId]);
 
@@ -84,7 +91,7 @@ export default function WebsiteScansPage() {
     setStarting(false);
     if (result.ok) {
       setMessage('Scan started');
-      load();
+      await loadScans(true);
     } else {
       setError(result.error?.message ?? 'Failed to start scan');
     }
@@ -106,7 +113,7 @@ export default function WebsiteScansPage() {
     setRetryingId(null);
     if (result.ok) {
       setMessage('Scan retry started');
-      load();
+      await loadScans(true);
     } else {
       setError(result.error?.message ?? 'Failed to retry scan');
     }
@@ -117,6 +124,8 @@ export default function WebsiteScansPage() {
     if (ms < 1000) return `${ms} ms`;
     return `${(ms / 1000).toFixed(1)} s`;
   }
+
+  const hasRunningScan = scans.some((s) => s.status === 'RUNNING');
 
   return (
     <ProtectedLayout>
@@ -129,6 +138,12 @@ export default function WebsiteScansPage() {
         Detect cookies, storage, and trackers on <strong>{domain?.hostname ?? '…'}</strong>.
       </p>
 
+      {hasRunningScan && (
+        <p className="success" role="status">
+          Scan in progress — this page refreshes every few seconds.
+        </p>
+      )}
+
       {message && <p className="success">{message}</p>}
       {error && <p className="error">{error}</p>}
 
@@ -137,8 +152,13 @@ export default function WebsiteScansPage() {
         <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
           Runs a crawl (up to {domain?.scanLimit ?? 10} pages) with JavaScript rendering.
         </p>
-        <button className="btn" type="button" disabled={starting || !domain} onClick={startScan}>
-          {starting ? 'Starting…' : 'Start scan'}
+        <button
+          className="btn"
+          type="button"
+          disabled={starting || !domain || hasRunningScan}
+          onClick={startScan}
+        >
+          {starting ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Start scan'}
         </button>
       </div>
 
@@ -185,12 +205,19 @@ export default function WebsiteScansPage() {
                           />
                         </div>
                         <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-                          {scan.progressPercent ?? 0}%
+                          {scan.pagesScanned}/{scan.maxPages} ({scan.progressPercent ?? 0}%)
                         </span>
                       </div>
                     )}
-                    {scan.status === 'FAILED' && scan.errorMessage && (
-                      <p style={{ fontSize: '0.75rem', color: 'var(--danger)', margin: '0.25rem 0 0' }}>
+                    {scan.errorMessage && (
+                      <p
+                        style={{
+                          fontSize: '0.75rem',
+                          color: scan.status === 'FAILED' ? 'var(--danger)' : 'var(--muted)',
+                          margin: '0.25rem 0 0',
+                          maxWidth: '28rem',
+                        }}
+                      >
                         {scan.errorMessage}
                       </p>
                     )}
@@ -204,7 +231,7 @@ export default function WebsiteScansPage() {
                       <button
                         className="btn-link"
                         type="button"
-                        disabled={retryingId === scan.id}
+                        disabled={retryingId === scan.id || hasRunningScan}
                         onClick={() => retryScan(scan.id)}
                       >
                         {retryingId === scan.id ? 'Retrying…' : 'Retry'}

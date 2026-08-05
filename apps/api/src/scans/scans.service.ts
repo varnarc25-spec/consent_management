@@ -85,7 +85,7 @@ export class ScansService {
 
   async list(user: CurrentUser, domainId: string): Promise<ScanSummaryResponse[]> {
     const domain = await this.getDomainForUser(user, domainId);
-    await this.repos.scans.expireStaleRunningScans(domain.id);
+    await this.repos.scans.expireStaleRunningScans(domain.id, 30 * 60 * 1000);
     const scans = await this.repos.scans.listByDomain(domain.id);
     return scans.map((scan) => this.toSummary(scan));
   }

@@ -62,15 +62,17 @@ export function WebsiteSetupSteps({
   const [validateDone, setValidateDone] = useState(false);
 
   useEffect(() => {
-    apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`).then((r) => {
+    apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`, { silent: true }).then((r) => {
       if (r.data) setScanDone(r.data.some((s) => s.status === 'COMPLETED'));
     });
-    apiFetch<PolicySummary[]>(`/domains/${domainId}/consent/policies`).then((r) => {
+    apiFetch<PolicySummary[]>(`/domains/${domainId}/consent/policies`, { silent: true }).then((r) => {
       if (r.data) setConsentDone(r.data.some((p) => p.status === 'PUBLISHED'));
     });
-    apiFetch<ValidationHistoryItem[]>(`/domains/${domainId}/validation-history`).then((r) => {
-      if (r.data) setValidateDone(r.data.some((v) => v.overallStatus === 'PASS'));
-    });
+    apiFetch<ValidationHistoryItem[]>(`/domains/${domainId}/validation-history`, { silent: true }).then(
+      (r) => {
+        if (r.data) setValidateDone(r.data.some((v) => v.overallStatus === 'PASS'));
+      },
+    );
   }, [domainId]);
 
   const stepDone = useMemo(() => {
