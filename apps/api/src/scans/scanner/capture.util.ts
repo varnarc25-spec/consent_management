@@ -191,9 +191,12 @@ export function collectPixelUrlsFromHtml(html: string): string[] {
 }
 
 export function countFindingStats(findings: ScanFindingInput[]) {
-  const cookies = findings.filter((f) => f.findingType === 'COOKIE').length;
-  const trackers = findings.filter((f) =>
-    ['SCRIPT', 'IFRAME', 'PIXEL', 'NETWORK_REQUEST'].includes(f.findingType),
+  const deduped = dedupeFindings(findings);
+  const cookies = deduped.filter((f) =>
+    ['COOKIE', 'LOCAL_STORAGE', 'SESSION_STORAGE', 'INDEXED_DB'].includes(f.findingType),
+  ).length;
+  const trackers = deduped.filter((f) =>
+    ['SCRIPT', 'IFRAME', 'PIXEL', 'NETWORK_REQUEST', 'SERVICE_WORKER'].includes(f.findingType),
   ).length;
   return { cookies, trackers };
 }

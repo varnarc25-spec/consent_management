@@ -23,7 +23,20 @@ interface DomainCookie {
   foundBeforeConsent: boolean;
   seenCount: number;
   lastSeenAt: string;
+  inventoryType: string;
 }
+
+const INVENTORY_TYPE_LABELS: Record<string, string> = {
+  COOKIE: 'Cookie',
+  LOCAL_STORAGE: 'Local storage',
+  SESSION_STORAGE: 'Session storage',
+  INDEXED_DB: 'IndexedDB',
+  SCRIPT: 'Script',
+  IFRAME: 'Iframe',
+  PIXEL: 'Pixel',
+  NETWORK_REQUEST: 'Network',
+  SERVICE_WORKER: 'Service worker',
+};
 
 const CATEGORIES = [
   'strictly_necessary',
@@ -109,7 +122,8 @@ export default function DomainCookiesPage() {
       </p>
       <h1>Cookie repository</h1>
       <p style={{ color: 'var(--muted)' }}>
-        Known cookies are auto-matched from scan results. Review unknown or low-confidence matches here.
+        Cookies, local storage keys, and trackers discovered by scans. Auto-matched items appear in the
+        category breakdown on the domain overview.
       </p>
 
       {message && <p className="success">{message}</p>}
@@ -121,7 +135,7 @@ export default function DomainCookiesPage() {
           className={tab === 'all' ? 'btn' : 'btn btn-secondary'}
           onClick={() => setTab('all')}
         >
-          All cookies ({cookies.length})
+          All items ({cookies.length})
         </button>
         <button
           type="button"
@@ -136,6 +150,7 @@ export default function DomainCookiesPage() {
         <table>
           <thead>
             <tr>
+              <th>Type</th>
               <th>Name</th>
               <th>Domain</th>
               <th>Provider</th>
@@ -149,6 +164,7 @@ export default function DomainCookiesPage() {
           <tbody>
             {list.map((cookie) => (
               <tr key={cookie.id}>
+                <td>{INVENTORY_TYPE_LABELS[cookie.inventoryType] ?? cookie.inventoryType}</td>
                 <td><code>{cookie.cookieName}</code></td>
                 <td>{cookie.cookieDomain ?? '—'}</td>
                 <td>{cookie.provider ?? '—'}</td>

@@ -17,6 +17,11 @@ import {
   compareScanCookies,
   type ScanCookieRecord,
 } from './scan-comparison';
+import {
+  groupScanFindingsForIngest,
+  isTrackerFindingType,
+  resolveTrackerCategory,
+} from './scan-findings-ingest';
 
 @Injectable()
 export class CookiesService {
@@ -155,54 +160,40 @@ export class CookiesService {
     if (!scan) return;
 
     const definitions = await this.repos.cookies.listDefinitions(scan.organizationId);
-    const cookieFindings = scan.findings.filter((finding) => finding.findingType === 'COOKIE');
+    const grouped = groupScanFindingsForIngest(scan.findings);
 
-    const grouped = new Map<string, {
-      name: string;
-      cookieDomain: string | null;
-      expiresAt: Date | null;
-      isThirdParty: boolean | null;
-      sourceUrl: string | null;
-      foundBeforeConsent: boolean;
-    }>();
-
-    for (const finding of cookieFindings) {
-      const key = buildCookieKey(finding.name, finding.cookieDomain);
-      const existing = grouped.get(key);
-      const foundBeforeConsent =
-        finding.consentState === 'BEFORE_CONSENT' || existing?.foundBeforeConsent;
-      grouped.set(key, {
-        name: finding.name,
-        cookieDomain: finding.cookieDomain,
-        expiresAt: finding.expiresAt ?? existing?.expiresAt ?? null,
-        isThirdParty: finding.isThirdParty ?? existing?.isThirdParty ?? null,
-        sourceUrl: finding.sourceUrl ?? existing?.sourceUrl ?? null,
-        foundBeforeConsent: Boolean(foundBeforeConsent),
-      });
-    }
-
-    for (const entry of grouped.values()) {
+    for (const entry of grouped) {
       const match = matchCookieDefinition(definitions, {
-        cookieName: entry.name,
+        cookieName: entry.cookieName,
         cookieDomain: entry.cookieDomain,
         sourceUrl: entry.sourceUrl,
         isThirdParty: entry.isThirdParty,
       });
 
-      const reviewStatus = match
-        ? reviewStatusForMatch(match.confidence)
-        : 'PENDING';
+      let category = match?.category;
+      let provider = match?.provider;
+      let reviewStatus = match ? reviewStatusForMatch(match.confidence) : 'PENDING';
+
+      if (!match && isTrackerFindingType(entry.findingType)) {
+        const trackerCategory = resolveTrackerCategory(entry.cookieName, entry.sourceUrl);
+        if (trackerCategory) {
+          category = trackerCategory;
+          provider = entry.cookieName;
+          reviewStatus = 'AUTO_MATCHED';
+        }
+      }
 
       await this.repos.cookies.upsertDomainCookie({
         domainId: scan.domainId,
         organizationId: scan.organizationId,
-        cookieName: entry.name,
+        inventoryKey: entry.inventoryKey,
+        cookieName: entry.cookieName,
         cookieDomain: entry.cookieDomain,
-        provider: match?.provider,
+        provider,
         providerDomain: match?.providerDomain,
         description: match?.description,
         purpose: match?.purpose,
-        category: match?.category,
+        category,
         duration: match?.duration,
         dataCollected: match?.dataCollected,
         isThirdParty: match?.isThirdParty ?? entry.isThirdParty,
@@ -216,9 +207,12 @@ export class CookiesService {
         expiresAt: entry.expiresAt,
         foundBeforeConsent: entry.foundBeforeConsent,
         sourceUrl: entry.sourceUrl,
-        metadata: match
-          ? { suggestedMatch: { definitionId: match.definitionId, confidence: match.confidence } }
-          : undefined,
+        metadata: {
+          ...entry.metadata,
+          ...(match
+            ? { suggestedMatch: { definitionId: match.definitionId, confidence: match.confidence } }
+            : {}),
+        },
       });
     }
   }
@@ -323,6 +317,7 @@ export class CookiesService {
     sourceUrl: string | null;
     expiresAt: Date | null;
     lastScanId: string | null;
+    metadata: unknown;
   }) {
     return {
       id: cookie.id,
@@ -347,6 +342,13 @@ export class CookiesService {
       sourceUrl: cookie.sourceUrl,
       expiresAt: cookie.expiresAt?.toISOString() ?? null,
       lastScanId: cookie.lastScanId,
+      inventoryType:
+        typeof cookie.metadata === 'object' &&
+        cookie.metadata !== null &&
+        'findingType' in cookie.metadata
+          ? String((cookie.metadata as Record<string, unknown>).findingType)
+          : 'COOKIE',
+      metadata: cookie.metadata as Record<string, unknown> | null,
     };
   }
 }

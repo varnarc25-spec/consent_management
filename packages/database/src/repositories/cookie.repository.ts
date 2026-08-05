@@ -15,6 +15,7 @@ export interface UpsertDomainCookieInput {
   organizationId: string;
   cookieName: string;
   cookieDomain?: string | null;
+  inventoryKey?: string;
   provider?: string | null;
   providerDomain?: string | null;
   description?: string | null;
@@ -141,7 +142,7 @@ export class CookieRepository {
   }
 
   async upsertDomainCookie(input: UpsertDomainCookieInput) {
-    const cookieKey = buildCookieKey(input.cookieName, input.cookieDomain);
+    const cookieKey = input.inventoryKey ?? buildCookieKey(input.cookieName, input.cookieDomain);
     const existing = await this.prisma.domainCookie.findUnique({
       where: { domainId_cookieKey: { domainId: input.domainId, cookieKey } },
     });
