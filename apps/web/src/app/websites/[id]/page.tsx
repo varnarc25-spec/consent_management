@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
 import { LoadingScreen } from '@/components/loading-screen';
 import { WebsiteSetupSteps } from '@/components/website-setup-steps';
+import { WebsiteDomainOverview } from '@/components/website-domain-overview';
 import { apiFetch } from '@/lib/api';
 
 interface Domain {
@@ -22,6 +23,8 @@ interface Domain {
   enabled: boolean;
   groupName: string | null;
   scanLimit: number;
+  scanFrequency: string;
+  nextScanAt: string | null;
   sdkLastSeenAt: string | null;
   isProduction: boolean;
 }
@@ -58,6 +61,7 @@ export default function DomainDetailPage() {
     enabled: true,
     groupName: '',
     scanLimit: 10,
+    scanFrequency: 'MANUAL',
     autoBlocking: true,
     debugMode: false,
   });
@@ -72,6 +76,7 @@ export default function DomainDetailPage() {
         enabled: r.data.enabled,
         groupName: r.data.groupName ?? '',
         scanLimit: r.data.scanLimit,
+        scanFrequency: r.data.scanFrequency ?? 'MANUAL',
         autoBlocking: r.data.autoBlocking,
         debugMode: r.data.debugMode,
       });
@@ -141,6 +146,7 @@ export default function DomainDetailPage() {
         enabled: settings.enabled,
         groupName: settings.groupName || undefined,
         scanLimit: settings.scanLimit,
+        scanFrequency: settings.scanFrequency,
         autoBlocking: settings.autoBlocking,
         debugMode: settings.debugMode,
       }),
@@ -184,6 +190,18 @@ export default function DomainDetailPage() {
         )}
       </p>
 
+      {message && <p className="success">{message}</p>}
+      {error && <p className="error">{error}</p>}
+
+      <WebsiteDomainOverview
+        domainId={domain.id}
+        hostname={domain.hostname}
+        scanLimit={domain.scanLimit}
+        scanFrequency={settings.scanFrequency}
+        nextScanAt={domain.nextScanAt}
+        onFrequencyChange={(f) => setSettings((s) => ({ ...s, scanFrequency: f }))}
+      />
+
       <div className="card website-setup-card" style={{ marginTop: '1.5rem' }}>
         <WebsiteSetupSteps
           domainId={domain.id}
@@ -193,11 +211,8 @@ export default function DomainDetailPage() {
         />
       </div>
 
-      {message && <p className="success">{message}</p>}
-      {error && <p className="error">{error}</p>}
-
       <div className="card" style={{ marginTop: '1.5rem', maxWidth: 640 }}>
-        <h3>Domain settings</h3>
+        <h3>Website settings</h3>
         <form onSubmit={saveSettings}>
           <div className="field">
             <label htmlFor="enabled">Status</label>
@@ -220,7 +235,7 @@ export default function DomainDetailPage() {
             />
           </div>
           <div className="field">
-            <label htmlFor="scanLimit">Scan limit</label>
+            <label htmlFor="scanLimit">Scan page limit</label>
             <input
               id="scanLimit"
               type="number"

@@ -451,6 +451,76 @@ code {
 
 .required { color: var(--danger); }
 
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+
+/* Cookiebot-style domain overview (web + admin) */
+.domain-section { margin-bottom: 2rem; }
+.domain-section-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; }
+.domain-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow-sm);
+}
+.domain-panel h3 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; }
+.domain-overview-grid,
+.domain-scan-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+.domain-stat-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.875rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.domain-stat-row:last-child { border-bottom: none; }
+.domain-stat-label { color: var(--muted); }
+.domain-stat-value { font-weight: 500; text-align: right; }
+.domain-cookie-total {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1;
+  margin: 0.5rem 0 1rem;
+}
+.domain-category-list { list-style: none; margin: 0 0 1rem; padding: 0; }
+.domain-category-list li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.domain-category-list li:last-child { border-bottom: none; }
+.domain-panel-link { font-size: 0.875rem; font-weight: 500; }
+.domain-scan-now-card { text-align: center; padding: 2rem 1.5rem; }
+.domain-scan-now-card p { color: var(--muted); font-size: 0.875rem; margin-bottom: 1.25rem; }
+.domain-empty-state {
+  color: var(--muted);
+  font-size: 0.875rem;
+  padding: 1.5rem;
+  text-align: center;
+  background: var(--surface-muted);
+  border-radius: 8px;
+}
+@media (max-width: 900px) {
+  .domain-overview-grid,
+  .domain-scan-grid { grid-template-columns: 1fr; }
+}
+
 .field-hint {
   font-size: 0.8125rem;
   color: var(--muted);
