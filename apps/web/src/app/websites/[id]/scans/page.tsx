@@ -67,7 +67,9 @@ export default function WebsiteScansPage() {
 
   const hasRunningScan = scans.some((s) => s.status === 'RUNNING');
 
-  const pollScans = useCallback(() => loadScans(true), [domainId]);
+  const pollScans = useCallback(async () => {
+    await loadScans(true);
+  }, [domainId]);
 
   useRunningScanPoll(hasRunningScan, pollScans);
 

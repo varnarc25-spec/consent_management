@@ -108,7 +108,9 @@ export function WebsiteDomainOverview({
 
   const hasRunningScan = scans.some((s) => s.status === 'RUNNING');
 
-  const pollScanProgress = useCallback(() => loadScans(true), [domainId]);
+  const pollScanProgress = useCallback(async () => {
+    await loadScans(true);
+  }, [domainId]);
 
   const refreshAfterScan = useCallback(async () => {
     await Promise.all([loadScans(true), loadCookieSummary(true)]);
