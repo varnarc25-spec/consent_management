@@ -178,8 +178,8 @@ export default function DomainDetailPage() {
     });
   }
 
-  function loadScans() {
-    apiFetch<ScanSummary[]>(`/domains/${id}/scans`).then((r) => {
+  function loadScans(silent = false) {
+    return apiFetch<ScanSummary[]>(`/domains/${id}/scans`, { silent }).then((r) => {
       if (r.data) {
         setScans(r.data);
         scansRef.current = r.data;
@@ -187,8 +187,8 @@ export default function DomainDetailPage() {
     });
   }
 
-  function loadCookieSummary() {
-    apiFetch<CookieCategorySummary>(`/domains/${id}/cookies/summary`).then((r) => {
+  function loadCookieSummary(silent = false) {
+    return apiFetch<CookieCategorySummary>(`/domains/${id}/cookies/summary`, { silent }).then((r) => {
       if (r.data) setCookieSummary(r.data);
     });
   }
@@ -222,10 +222,10 @@ export default function DomainDetailPage() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (scansRef.current.some((s) => s.status === 'RUNNING')) {
-        loadScans();
-        loadCookieSummary();
+        loadScans(true);
+        loadCookieSummary(true);
       }
-    }, 5000);
+    }, 3000);
     return () => window.clearInterval(timer);
   }, [id]);
 

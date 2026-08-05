@@ -104,8 +104,11 @@ export async function ensureApiSession(): Promise<boolean> {
 
 export async function apiFetch<T>(
   path: string,
-  options: RequestInit & { accessToken?: string; skipAuth?: boolean } = {},
+  options: RequestInit & { accessToken?: string; skipAuth?: boolean; silent?: boolean } = {},
 ): Promise<ApiResult<T>> {
+  if (options.silent) {
+    return apiFetchInternal<T>(path, options);
+  }
   startLoading();
   try {
     return await apiFetchInternal<T>(path, options);
@@ -116,7 +119,7 @@ export async function apiFetch<T>(
 
 async function apiFetchInternal<T>(
   path: string,
-  options: RequestInit & { accessToken?: string; skipAuth?: boolean } = {},
+  options: RequestInit & { accessToken?: string; skipAuth?: boolean; silent?: boolean } = {},
 ): Promise<ApiResult<T>> {
   const apiUrl = getApiBaseUrl();
   const { accessToken, skipAuth, headers, ...rest } = options;

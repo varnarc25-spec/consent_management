@@ -85,6 +85,7 @@ export class ScansService {
 
   async list(user: CurrentUser, domainId: string): Promise<ScanSummaryResponse[]> {
     const domain = await this.getDomainForUser(user, domainId);
+    await this.repos.scans.expireStaleRunningScans(domain.id);
     const scans = await this.repos.scans.listByDomain(domain.id);
     return scans.map((scan) => this.toSummary(scan));
   }
@@ -294,9 +295,7 @@ export class ScansService {
 
       await this.repos.scans.updateStatus(scanId, 'RUNNING', { startedAt });
 
-      const result = await runWebsiteScan(scan);
-
-      for (const pageRecord of result.pageRecords) {
+      const result = await runWebsiteScan(scan, async (pageRecord, progress) => {
         const page = await this.repos.scans.createPage(scanId, {
           url: pageRecord.url,
           canonicalUrl: pageRecord.canonicalUrl,
@@ -310,7 +309,13 @@ export class ScansService {
           pageId: page.id,
         }));
         await this.repos.scans.createFindings(scanId, findings);
-      }
+
+        await this.repos.scans.updateStatus(scanId, 'RUNNING', {
+          pagesScanned: progress.pagesScanned,
+          cookiesFound: progress.cookiesFound,
+          trackersFound: progress.trackersFound,
+        });
+      });
 
       const completedAt = new Date();
       await this.repos.scans.updateStatus(scanId, 'COMPLETED', {
@@ -321,7 +326,16 @@ export class ScansService {
         trackersFound: result.trackersFound,
       });
 
-      await this.cookiesService.ingestScanResults(scanId);
+      try {
+        await this.cookiesService.ingestScanResults(scanId);
+      } catch (ingestError) {
+        const ingestMessage =
+          ingestError instanceof Error ? ingestError.message : 'Cookie inventory ingest failed';
+        this.logger.error(`Scan ${scanId} ingest failed: ${ingestMessage}`);
+        await this.repos.scans.updateStatus(scanId, 'COMPLETED', {
+          errorMessage: `Scan finished but cookie inventory update failed: ${ingestMessage}`,
+        });
+      }
 
       void this.webhookDelivery.emit(scan.organizationId, 'scan.completed', {
         scanId,

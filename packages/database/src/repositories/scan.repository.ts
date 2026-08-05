@@ -60,6 +60,36 @@ export class ScanRepository {
     });
   }
 
+  async expireStaleRunningScans(domainId?: string, maxAgeMs = 2 * 60 * 60 * 1000) {
+    const cutoff = new Date(Date.now() - maxAgeMs);
+    const stale = await this.prisma.domainScan.findMany({
+      where: {
+        status: 'RUNNING',
+        startedAt: { lt: cutoff },
+        ...(domainId ? { domainId } : {}),
+      },
+      select: { id: true, startedAt: true },
+    });
+
+    for (const scan of stale) {
+      const durationMs = scan.startedAt
+        ? Date.now() - scan.startedAt.getTime()
+        : maxAgeMs;
+      await this.prisma.domainScan.update({
+        where: { id: scan.id },
+        data: {
+          status: 'FAILED',
+          errorMessage:
+            'Scan timed out or was interrupted (server restarted). Start a new scan.',
+          completedAt: new Date(),
+          durationMs,
+        },
+      });
+    }
+
+    return stale.length;
+  }
+
   create(input: CreateScanInput) {
     return this.prisma.domainScan.create({
       data: {

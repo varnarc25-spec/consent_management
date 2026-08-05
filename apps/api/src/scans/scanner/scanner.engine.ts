@@ -35,6 +35,17 @@ export interface ScanRunResult {
   }>;
 }
 
+export interface ScanProgressUpdate {
+  pagesScanned: number;
+  cookiesFound: number;
+  trackersFound: number;
+}
+
+export type ScanPageProgressHandler = (
+  pageRecord: ScanRunResult['pageRecords'][number],
+  progress: ScanProgressUpdate,
+) => Promise<void>;
+
 async function loadPlaywright() {
   if (!process.env.PLAYWRIGHT_BROWSERS_PATH && process.env.NODE_ENV === 'production') {
     process.env.PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright';
@@ -190,7 +201,10 @@ async function scanPageState(
   return [...cookieFindings, ...domFindings];
 }
 
-export async function runWebsiteScan(scan: DomainScan): Promise<ScanRunResult> {
+export async function runWebsiteScan(
+  scan: DomainScan,
+  onPageScanned?: ScanPageProgressHandler,
+): Promise<ScanRunResult> {
   const playwright = await loadPlaywright();
   const includePaths = (scan.includePaths as string[] | null) ?? undefined;
   const excludePaths = (scan.excludePaths as string[] | null) ?? undefined;
@@ -348,15 +362,25 @@ export async function runWebsiteScan(scan: DomainScan): Promise<ScanRunResult> {
       }
 
       pagesScanned += 1;
-      pageRecords.push({
+      const pageRecord = {
         url: normalized,
         canonicalUrl: normalized,
         status: pageStatus,
         depth: current.depth,
         errorMessage,
         findings: dedupeFindings(pageFindings),
-      });
+      };
+      pageRecords.push(pageRecord);
       allFindings.push(...pageFindings);
+
+      if (onPageScanned) {
+        const progressStats = countFindingStats(dedupeFindings(allFindings));
+        await onPageScanned(pageRecord, {
+          pagesScanned,
+          cookiesFound: progressStats.cookies,
+          trackersFound: progressStats.trackers,
+        });
+      }
     }
   } finally {
     await browser.close();

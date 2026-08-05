@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
@@ -34,6 +34,7 @@ export default function DomainScansPage() {
   const domainId = params.id as string;
   const [domain, setDomain] = useState<Domain | null>(null);
   const [scans, setScans] = useState<ScanSummary[]>([]);
+  const scansRef = useRef<ScanSummary[]>([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
@@ -49,8 +50,17 @@ export default function DomainScansPage() {
     deviceType: 'desktop' as 'desktop' | 'mobile',
   });
 
-  function load() {
-    apiFetch<Domain>(`/domains/${domainId}`).then((r) => {
+  function loadScans(silent = false) {
+    return apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`, { silent }).then((r) => {
+      if (r.data) {
+        setScans(r.data);
+        scansRef.current = r.data;
+      }
+    });
+  }
+
+  function loadDomain() {
+    apiFetch<Domain>(`/domains/${domainId}`, { silent: true }).then((r) => {
       if (r.data) {
         setDomain(r.data);
         setForm((current) => ({
@@ -60,14 +70,20 @@ export default function DomainScansPage() {
         }));
       }
     });
-    apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`).then((r) => {
-      if (r.data) setScans(r.data);
-    });
+  }
+
+  function load() {
+    loadDomain();
+    return loadScans(true);
   }
 
   useEffect(() => {
     load();
-    const timer = window.setInterval(load, 5000);
+    const timer = window.setInterval(() => {
+      if (scansRef.current.some((s) => s.status === 'RUNNING')) {
+        loadScans(true);
+      }
+    }, 3000);
     return () => window.clearInterval(timer);
   }, [domainId]);
 
@@ -96,7 +112,7 @@ export default function DomainScansPage() {
     setStarting(false);
     if (result.ok) {
       setMessage('Scan started');
-      load();
+      await loadScans(true);
     } else {
       setError(result.error?.message ?? 'Failed to start scan');
     }
@@ -112,7 +128,7 @@ export default function DomainScansPage() {
     setRetryingId(null);
     if (result.ok) {
       setMessage('Scan retry started');
-      load();
+      await loadScans(true);
     } else {
       setError(result.error?.message ?? 'Failed to retry scan');
     }
@@ -123,6 +139,8 @@ export default function DomainScansPage() {
     if (ms < 1000) return `${ms} ms`;
     return `${(ms / 1000).toFixed(1)} s`;
   }
+
+  const hasRunningScan = scans.some((s) => s.status === 'RUNNING');
 
   return (
     <ProtectedLayout>
@@ -136,6 +154,12 @@ export default function DomainScansPage() {
         Crawl <strong>{domain?.hostname ?? '…'}</strong> with a headless browser to detect cookies,
         storage, and trackers.
       </p>
+
+      {hasRunningScan && (
+        <p className="success" role="status">
+          Scan in progress — results update automatically every few seconds.
+        </p>
+      )}
 
       {message && <p className="success">{message}</p>}
       {error && <p className="error">{error}</p>}
@@ -225,11 +249,11 @@ export default function DomainScansPage() {
               checked={form.jsRendering}
               onChange={(e) => setForm({ ...form, jsRendering: e.target.checked })}
             />
-            JavaScript rendering (wait for network idle)
+            JavaScript rendering
           </label>
         </div>
-        <button className="btn" type="submit" disabled={starting}>
-          {starting ? 'Starting…' : 'Start scan'}
+        <button className="btn" type="submit" disabled={starting || hasRunningScan}>
+          {starting ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Start scan'}
         </button>
       </form>
 
@@ -276,12 +300,19 @@ export default function DomainScansPage() {
                           />
                         </div>
                         <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-                          {scan.progressPercent ?? 0}%
+                          {scan.pagesScanned}/{scan.maxPages} pages ({scan.progressPercent ?? 0}%)
                         </span>
                       </div>
                     )}
-                    {scan.status === 'FAILED' && scan.errorMessage && (
-                      <p style={{ fontSize: '0.75rem', color: 'var(--danger)', margin: '0.25rem 0 0' }}>
+                    {scan.errorMessage && (
+                      <p
+                        style={{
+                          fontSize: '0.75rem',
+                          color: scan.status === 'FAILED' ? 'var(--danger)' : 'var(--muted)',
+                          margin: '0.25rem 0 0',
+                          maxWidth: '28rem',
+                        }}
+                      >
                         {scan.errorMessage}
                       </p>
                     )}
@@ -298,7 +329,7 @@ export default function DomainScansPage() {
                         <button
                           className="btn-link"
                           type="button"
-                          disabled={retryingId === scan.id}
+                          disabled={retryingId === scan.id || hasRunningScan}
                           onClick={() => retryScan(scan.id)}
                         >
                           {retryingId === scan.id ? 'Retrying…' : 'Retry'}

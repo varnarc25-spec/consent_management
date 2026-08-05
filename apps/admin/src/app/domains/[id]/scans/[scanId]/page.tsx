@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
@@ -69,6 +69,7 @@ export default function ScanDetailPage() {
   const domainId = params.id as string;
   const scanId = params.scanId as string;
   const [scan, setScan] = useState<ScanDetail | null>(null);
+  const scanRef = useRef<ScanDetail | null>(null);
   const [scanHistory, setScanHistory] = useState<ScanSummary[]>([]);
   const [baselineScanId, setBaselineScanId] = useState('');
   const [compareResult, setCompareResult] = useState<ScanCompareResult | null>(null);
@@ -76,19 +77,28 @@ export default function ScanDetailPage() {
   const [consentFilter, setConsentFilter] = useState('all');
 
   useEffect(() => {
-    apiFetch<ScanDetail>(`/domains/${domainId}/scans/${scanId}`).then((r) => {
-      if (r.data) setScan(r.data);
-    });
-    apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`).then((r) => {
+    function loadScan(silent = false) {
+      return apiFetch<ScanDetail>(`/domains/${domainId}/scans/${scanId}`, { silent }).then((r) => {
+        if (r.data) {
+          setScan(r.data);
+          scanRef.current = r.data;
+        }
+        return r.data;
+      });
+    }
+
+    loadScan();
+    apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`, { silent: true }).then((r) => {
       if (r.data) {
         setScanHistory(r.data.filter((item) => item.id !== scanId && item.status === 'COMPLETED'));
       }
     });
+
     const timer = window.setInterval(() => {
-      apiFetch<ScanDetail>(`/domains/${domainId}/scans/${scanId}`).then((r) => {
-        if (r.data) setScan(r.data);
-      });
-    }, 5000);
+      if (scanRef.current?.status === 'RUNNING') {
+        loadScan(true);
+      }
+    }, 3000);
     return () => window.clearInterval(timer);
   }, [domainId, scanId]);
 
