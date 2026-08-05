@@ -33,6 +33,11 @@ describe('crawl.util', () => {
     expect(links.some((link) => link.includes('other.com'))).toBe(false);
   });
 
+  it('skips static asset paths', () => {
+    expect(matchesPathRules('/_next/static/chunk.js')).toBe(false);
+    expect(matchesPathRules('/finance')).toBe(true);
+  });
+
   it('enqueueDiscoveredLinks respects path rules and seen set', () => {
     const seen = new Set<string>(['https://example.com/about']);
     const queue: Array<{ url: string; depth: number }> = [];

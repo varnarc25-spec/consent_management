@@ -158,7 +158,11 @@ export class ScansService {
       ...meta,
     });
 
-    void this.processScan(scan.id);
+    void this.processScan(scan.id).catch((error) => {
+      this.logger.error(
+        `Background scan ${scan.id} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
     void this.webhookDelivery.emit(scan.organizationId, 'scan.started', {
       scanId: scan.id,
       domainId: domain.id,
@@ -220,7 +224,11 @@ export class ScansService {
       ...meta,
     });
 
-    void this.processScan(scan.id);
+    void this.processScan(scan.id).catch((error) => {
+      this.logger.error(
+        `Background scan ${scan.id} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
     void this.webhookDelivery.emit(scan.organizationId, 'scan.started', {
       scanId: scan.id,
       domainId: domain.id,

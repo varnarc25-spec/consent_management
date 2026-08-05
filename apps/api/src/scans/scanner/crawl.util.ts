@@ -26,8 +26,18 @@ export function isSameSite(url: string, siteHostname: string) {
   return host === site || host.endsWith(`.${site}`);
 }
 
+function isCrawlablePath(pathname: string) {
+  const path = pathname.replace(/\/$/, '') || '/';
+  if (path.startsWith('/_next/')) return false;
+  if (/\.(css|js|mjs|map|png|jpe?g|gif|svg|ico|webp|woff2?|ttf|eot)$/i.test(path)) {
+    return false;
+  }
+  return true;
+}
+
 export function matchesPathRules(pathname: string, includePaths?: string[], excludePaths?: string[]) {
   const path = pathname.replace(/\/$/, '') || '/';
+  if (!isCrawlablePath(pathname)) return false;
   if (excludePaths?.length) {
     for (const pattern of excludePaths) {
       if (matchPathPattern(path, pattern)) return false;
@@ -106,7 +116,11 @@ async function fetchText(url: string, timeoutMs = 15000): Promise<string | null>
   try {
     const response = await fetch(url, {
       signal: AbortSignal.timeout(timeoutMs),
-      headers: { 'User-Agent': 'CMP-Website-Scanner/1.0', Accept: 'text/xml,text/plain,*/*' },
+      headers: {
+        'User-Agent': SCANNER_USER_AGENT,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
       redirect: 'follow',
     });
     if (!response.ok) return null;
@@ -114,6 +128,27 @@ async function fetchText(url: string, timeoutMs = 15000): Promise<string | null>
   } catch {
     return null;
   }
+}
+
+export const SCANNER_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+function isLocalOrPrivateUrl(url: string) {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    if (
+      host === 'localhost' ||
+      host.endsWith('.localhost') ||
+      host === '127.0.0.1' ||
+      host.startsWith('192.168.') ||
+      host.startsWith('10.')
+    ) {
+      return true;
+    }
+  } catch {
+    return true;
+  }
+  return false;
 }
 
 async function collectSitemapUrls(
@@ -152,7 +187,10 @@ export async function discoverSitemapUrls(startUrl: string, siteHostname: string
   if (robots) {
     for (const line of robots.split('\n')) {
       const match = line.match(/^\s*sitemap:\s*(.+)\s*$/i);
-      if (match?.[1]) sitemapCandidates.add(match[1].trim());
+      const candidate = match?.[1]?.trim();
+      if (candidate && !isLocalOrPrivateUrl(candidate)) {
+        sitemapCandidates.add(candidate);
+      }
     }
   }
 
@@ -175,11 +213,71 @@ export function enqueueDiscoveredLinks(
   excludePaths?: string[],
 ) {
   for (const link of links) {
-    if (seen.has(link)) continue;
-    const pathName = new URL(link).pathname;
+    const normalized = normalizeUrl(link);
+    if (!normalized || seen.has(normalized)) continue;
+    const pathName = new URL(normalized).pathname;
     if (!matchesPathRules(pathName, includePaths, excludePaths)) continue;
-    queue.push({ url: link, depth });
+    queue.push({ url: normalized, depth });
   }
+}
+
+/** Fetch a single page and return same-site crawl targets from SSR HTML. */
+export async function discoverLinksFromFetchPage(
+  pageUrl: string,
+  siteHostname: string,
+): Promise<string[]> {
+  const normalized = normalizeUrl(pageUrl);
+  if (!normalized) return [];
+  const html = await fetchText(normalized);
+  if (!html) return [];
+  return extractLinks(html, normalized, siteHostname);
+}
+
+/**
+ * Discover same-site URLs via HTTP fetch (SSR HTML). Used for tests and optional deep discovery.
+ */
+export async function discoverLinksViaFetchBfs(
+  startUrl: string,
+  siteHostname: string,
+  maxDepth: number,
+  maxPages: number,
+  includePaths?: string[],
+  excludePaths?: string[],
+): Promise<Array<{ url: string; depth: number }>> {
+  const startNormalized = normalizeUrl(startUrl);
+  if (!startNormalized) return [];
+
+  const discovered: Array<{ url: string; depth: number }> = [];
+  const seen = new Set<string>();
+  const queue: Array<{ url: string; depth: number }> = [{ url: startNormalized, depth: 0 }];
+
+  while (queue.length > 0 && discovered.length < maxPages) {
+    const current = queue.shift()!;
+    const normalized = normalizeUrl(current.url);
+    if (!normalized || seen.has(normalized)) continue;
+
+    const pathName = new URL(normalized).pathname;
+    if (!matchesPathRules(pathName, includePaths, excludePaths)) continue;
+
+    seen.add(normalized);
+    discovered.push({ url: normalized, depth: current.depth });
+
+    if (current.depth >= maxDepth) continue;
+
+    const html = await fetchText(normalized, 12000);
+    if (!html) continue;
+
+    const links = extractLinks(html, normalized, siteHostname);
+    for (const link of links) {
+      const linkNormalized = normalizeUrl(link);
+      if (!linkNormalized || seen.has(linkNormalized)) continue;
+      const linkPath = new URL(linkNormalized).pathname;
+      if (!matchesPathRules(linkPath, includePaths, excludePaths)) continue;
+      queue.push({ url: linkNormalized, depth: current.depth + 1 });
+    }
+  }
+
+  return discovered;
 }
 
 export function buildStartUrl(hostname: string, startUrl?: string) {

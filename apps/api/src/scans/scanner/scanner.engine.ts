@@ -8,6 +8,7 @@ import {
   domSnapshotToFindings,
 } from './capture.util';
 import {
+  discoverLinksFromFetchPage,
   discoverSitemapUrls,
   enqueueDiscoveredLinks,
   getHostname,
@@ -15,6 +16,7 @@ import {
   matchesPathRules,
   mergeDiscoveredLinks,
   normalizeUrl,
+  SCANNER_USER_AGENT,
 } from './crawl.util';
 import { isTrackingPixelUrl } from './tracker-patterns';
 
@@ -197,12 +199,20 @@ export async function runWebsiteScan(scan: DomainScan): Promise<ScanRunResult> {
     throw new Error('Invalid start URL hostname');
   }
 
-  const browser: Browser = await playwright.chromium.launch({ headless: true });
+  const browser: Browser = await playwright.chromium.launch({
+    headless: true,
+    args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
+  });
   const contextOptions =
     scan.deviceType === 'mobile'
       ? playwright.devices['Pixel 7']
       : { viewport: { width: 1366, height: 900 } };
-  const context: BrowserContext = await browser.newContext(contextOptions);
+  const context: BrowserContext = await browser.newContext({
+    ...contextOptions,
+    userAgent: SCANNER_USER_AGENT,
+    locale: 'en-US',
+    extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
+  });
   const page = await context.newPage();
 
   const queue: Array<{ url: string; depth: number }> = [{ url: scan.startUrl, depth: 0 }];
@@ -210,6 +220,9 @@ export async function runWebsiteScan(scan: DomainScan): Promise<ScanRunResult> {
   const allFindings: ScanFindingInput[] = [];
   const pageRecords: ScanRunResult['pageRecords'] = [];
   let pagesScanned = 0;
+
+  const homeLinks = await discoverLinksFromFetchPage(scan.startUrl, siteHostname);
+  enqueueDiscoveredLinks(homeLinks, 1, seen, queue, includePaths, excludePaths);
 
   const sitemapUrls = await discoverSitemapUrls(scan.startUrl, siteHostname);
   enqueueDiscoveredLinks(
@@ -220,6 +233,8 @@ export async function runWebsiteScan(scan: DomainScan): Promise<ScanRunResult> {
     includePaths,
     excludePaths,
   );
+
+  const startNormalized = normalizeUrl(scan.startUrl);
 
   try {
     while (queue.length > 0 && pagesScanned < scan.maxPages) {
@@ -259,6 +274,9 @@ export async function runWebsiteScan(scan: DomainScan): Promise<ScanRunResult> {
           discoveredLinks = mergeDiscoveredLinks(html, anchorHrefs, normalized, siteHostname);
         }
 
+        const runFullConsentProbe =
+          startNormalized !== null && normalized === startNormalized;
+
         pageFindings.push(
           ...(await scanPageState(
             page,
@@ -271,30 +289,14 @@ export async function runWebsiteScan(scan: DomainScan): Promise<ScanRunResult> {
           )),
         );
 
-        const accepted = await clickCmpAction(page, 'accept-all');
-        if (accepted) {
-          pageFindings.push(
-            ...(await scanPageState(
-              page,
-              context,
-              'AFTER_ACCEPT',
-              normalized,
-              pageIdPlaceholder,
-              siteHostname,
-              networkUrls,
-            )),
-          );
-        }
-
-        try {
-          await navigateForScan(page, normalized, scan.jsRendering, scan.timeoutMs);
-          const rejected = await clickCmpAction(page, 'reject-all');
-          if (rejected) {
+        if (runFullConsentProbe) {
+          const accepted = await clickCmpAction(page, 'accept-all');
+          if (accepted) {
             pageFindings.push(
               ...(await scanPageState(
                 page,
                 context,
-                'AFTER_REJECT',
+                'AFTER_ACCEPT',
                 normalized,
                 pageIdPlaceholder,
                 siteHostname,
@@ -302,13 +304,30 @@ export async function runWebsiteScan(scan: DomainScan): Promise<ScanRunResult> {
               )),
             );
           }
-        } catch (rejectError) {
-          // Reject-state capture is optional; keep discovered links from the first load.
-          if (!errorMessage) {
-            errorMessage =
-              rejectError instanceof Error
-                ? `Reject capture failed: ${rejectError.message}`
-                : 'Reject capture failed';
+
+          try {
+            await navigateForScan(page, normalized, scan.jsRendering, scan.timeoutMs);
+            const rejected = await clickCmpAction(page, 'reject-all');
+            if (rejected) {
+              pageFindings.push(
+                ...(await scanPageState(
+                  page,
+                  context,
+                  'AFTER_REJECT',
+                  normalized,
+                  pageIdPlaceholder,
+                  siteHostname,
+                  networkUrls,
+                )),
+              );
+            }
+          } catch (rejectError) {
+            if (!errorMessage) {
+              errorMessage =
+                rejectError instanceof Error
+                  ? `Reject capture failed: ${rejectError.message}`
+                  : 'Reject capture failed';
+            }
           }
         }
       } catch (error) {

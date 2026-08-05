@@ -37,6 +37,8 @@ steps:
       - '--port=8080'
       - '--memory=2Gi'
       - '--cpu=2'
+      - '--no-cpu-throttling'
+      - '--timeout=3600'
       - '--startup-probe=initialDelaySeconds=30,timeoutSeconds=5,periodSeconds=10,failureThreshold=18,httpGet.path=/api/v1/health,httpGet.port=8080'
       - >-
         --set-env-vars=NODE_ENV=production,API_PREFIX=api/v1,API_URL=${_API_URL},ADMIN_URL=${_ADMIN_URL},WEB_URL=${_WEB_URL},EMAIL_VERIFICATION_ENABLED=false,DOMAIN_AUTO_VERIFY=false,AUTH0_DOMAIN=${_AUTH0_DOMAIN},AUTH0_AUDIENCE=${_AUTH0_AUDIENCE},AUTH0_ISSUER_URL=https://${_AUTH0_DOMAIN}/
