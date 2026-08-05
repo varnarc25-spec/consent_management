@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
 import { ScanStatusBadge } from '@/components/scans/scan-status-badge';
+import { useRunningScanPoll } from '@/hooks/use-running-scan-poll';
 import { apiFetch, ensureApiSession } from '@/lib/api';
 
 interface Domain {
@@ -48,7 +49,6 @@ export default function WebsiteScansPage() {
   const domainId = params.id as string;
   const [domain, setDomain] = useState<Domain | null>(null);
   const [scans, setScans] = useState<ScanSummary[]>([]);
-  const scansRef = useRef<ScanSummary[]>([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
@@ -59,12 +59,17 @@ export default function WebsiteScansPage() {
     return apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`, { silent }).then((r) => {
       if (r.data) {
         setScans(r.data);
-        scansRef.current = r.data;
       } else if (r.error?.code === 'UNAUTHORIZED') {
         setError('Session expired. Please sign in again.');
       }
     });
   }
+
+  const hasRunningScan = scans.some((s) => s.status === 'RUNNING');
+
+  const pollScans = useCallback(() => loadScans(true), [domainId]);
+
+  useRunningScanPoll(hasRunningScan, pollScans);
 
   async function loadInitial() {
     const domainResult = await apiFetch<Domain>(`/domains/${domainId}`);
@@ -78,12 +83,6 @@ export default function WebsiteScansPage() {
 
   useEffect(() => {
     loadInitial();
-    const timer = window.setInterval(() => {
-      if (scansRef.current.some((s) => s.status === 'RUNNING')) {
-        loadScans(true);
-      }
-    }, 3000);
-    return () => window.clearInterval(timer);
   }, [domainId]);
 
   async function startScan() {
@@ -190,7 +189,6 @@ export default function WebsiteScansPage() {
     }
   }
 
-  const hasRunningScan = scans.some((s) => s.status === 'RUNNING');
   const lastCompleted = scans.find((s) => s.status === 'COMPLETED');
   const totalScans = scans.length;
   const failedCount = scans.filter((s) => s.status === 'FAILED' || s.status === 'CANCELLED').length;

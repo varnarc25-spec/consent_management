@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRunningScanPoll } from '@/hooks/use-running-scan-poll';
 import { apiFetch, ensureApiSession, getApiUrl } from '@/lib/api';
 
 interface ScanSummary {
@@ -70,8 +71,6 @@ export function WebsiteDomainOverview({
   onFrequencyChange,
 }: WebsiteDomainOverviewProps) {
   const [scans, setScans] = useState<ScanSummary[]>([]);
-  const scansRef = useRef<ScanSummary[]>([]);
-  const pollTimerRef = useRef<number | null>(null);
   const [cookieSummary, setCookieSummary] = useState<CookieCategorySummary | null>(null);
   const [summaryError, setSummaryError] = useState('');
   const [frequency, setFrequency] = useState(scanFrequency);
@@ -84,10 +83,7 @@ export function WebsiteDomainOverview({
 
   function loadScans(silent = true) {
     return apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`, { silent }).then((r) => {
-      if (r.data) {
-        setScans(r.data);
-        scansRef.current = r.data;
-      }
+      if (r.data) setScans(r.data);
       return r.data;
     });
   }
@@ -105,33 +101,21 @@ export function WebsiteDomainOverview({
     );
   }
 
-  function schedulePoll() {
-    if (pollTimerRef.current !== null) {
-      window.clearTimeout(pollTimerRef.current);
-    }
-    if (!scansRef.current.some((s) => s.status === 'RUNNING')) {
-      return;
-    }
-    pollTimerRef.current = window.setTimeout(async () => {
-      await Promise.all([loadScans(true), loadCookieSummary(true)]);
-      schedulePoll();
-    }, 3000);
-  }
-
   useEffect(() => {
-    async function init() {
-      await Promise.all([loadScans(true), loadCookieSummary(true)]);
-      schedulePoll();
-    }
-    init();
-    return () => {
-      if (pollTimerRef.current !== null) {
-        window.clearTimeout(pollTimerRef.current);
-      }
-    };
+    loadScans(true);
+    loadCookieSummary(true);
   }, [domainId]);
 
   const hasRunningScan = scans.some((s) => s.status === 'RUNNING');
+
+  const pollScanProgress = useCallback(() => loadScans(true), [domainId]);
+
+  const refreshAfterScan = useCallback(async () => {
+    await Promise.all([loadScans(true), loadCookieSummary(true)]);
+  }, [domainId]);
+
+  useRunningScanPoll(hasRunningScan, pollScanProgress, refreshAfterScan);
+
   const runningScan = scans.find((s) => s.status === 'RUNNING');
 
   const lastCompletedScan = useMemo(
@@ -186,7 +170,6 @@ export function WebsiteDomainOverview({
     if (result.ok) {
       setMessage('Scan started');
       await loadScans(true);
-      schedulePoll();
     }
   }
 
@@ -212,7 +195,7 @@ export function WebsiteDomainOverview({
           {runningScan?.maxPages
             ? ` (${runningScan.pagesScanned ?? 0}/${runningScan.maxPages} pages, ${runningScan.cookiesFound ?? 0} cookies, ${runningScan.trackersFound ?? 0} trackers)`
             : ''}
-          — updates every few seconds.
+          — updates every few seconds (scan progress only).
         </p>
       )}
 
