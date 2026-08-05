@@ -12,6 +12,7 @@ import {
   discoverSitemapUrls,
   enqueueDiscoveredLinks,
   getHostname,
+  CHROMIUM_LAUNCH_ARGS,
   isSameSite,
   matchesPathRules,
   mergeDiscoveredLinks,
@@ -283,7 +284,7 @@ export async function runWebsiteScan(
 
   const browser: Browser = await playwright.chromium.launch({
     headless: true,
-    args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
+    args: CHROMIUM_LAUNCH_ARGS,
   });
   const contextOptions =
     scan.deviceType === 'mobile'

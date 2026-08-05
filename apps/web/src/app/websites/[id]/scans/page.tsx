@@ -28,6 +28,11 @@ interface ScanSummary {
   createdAt: string;
 }
 
+interface CookieCategorySummary {
+  total: number;
+  categories: Array<{ slug: string; name: string; count: number }>;
+}
+
 function formatDuration(ms: number | null) {
   if (!ms) return '—';
   if (ms < 1000) return `${ms} ms`;
@@ -49,11 +54,20 @@ export default function WebsiteScansPage() {
   const domainId = params.id as string;
   const [domain, setDomain] = useState<Domain | null>(null);
   const [scans, setScans] = useState<ScanSummary[]>([]);
+  const [cookieSummary, setCookieSummary] = useState<CookieCategorySummary | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  function loadCookieSummary(silent = false) {
+    return apiFetch<CookieCategorySummary>(`/domains/${domainId}/cookies/summary`, { silent }).then(
+      (r) => {
+        if (r.data) setCookieSummary(r.data);
+      },
+    );
+  }
 
   function loadScans(silent = false) {
     return apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`, { silent }).then((r) => {
@@ -71,7 +85,11 @@ export default function WebsiteScansPage() {
     await loadScans(true);
   }, [domainId]);
 
-  useRunningScanPoll(hasRunningScan, pollScans);
+  const refreshAfterScan = useCallback(async () => {
+    await Promise.all([loadScans(true), loadCookieSummary(true)]);
+  }, [domainId]);
+
+  useRunningScanPoll(hasRunningScan, pollScans, refreshAfterScan);
 
   async function loadInitial() {
     const domainResult = await apiFetch<Domain>(`/domains/${domainId}`);
@@ -81,6 +99,7 @@ export default function WebsiteScansPage() {
       setError('Session expired. Please sign in again.');
     }
     await loadScans();
+    await loadCookieSummary();
   }
 
   useEffect(() => {
@@ -253,15 +272,19 @@ export default function WebsiteScansPage() {
 
       <div className="stat-grid">
         <div className="stat-card">
+          <span className="stat-label">Inventory total</span>
+          <span className="stat-value">{cookieSummary?.total ?? '—'}</span>
+        </div>
+        <div className="stat-card">
           <span className="stat-label">Total scans</span>
           <span className="stat-value">{totalScans}</span>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Last cookies</span>
+          <span className="stat-label">Last scan cookies</span>
           <span className="stat-value">{lastCompleted?.cookiesFound ?? '—'}</span>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Last trackers</span>
+          <span className="stat-label">Last scan trackers</span>
           <span className="stat-value">{lastCompleted?.trackersFound ?? '—'}</span>
         </div>
         <div className="stat-card">
@@ -269,6 +292,25 @@ export default function WebsiteScansPage() {
           <span className="stat-value">{failedCount}</span>
         </div>
       </div>
+
+      {cookieSummary && cookieSummary.total > 0 && (
+        <div className="card" style={{ marginBottom: '1.5rem' }}>
+          <div className="card-header">
+            <h2>Cookie inventory</h2>
+            <Link className="card-meta" href={`/websites/${domainId}`}>Overview →</Link>
+          </div>
+          <ul className="domain-category-list" style={{ margin: 0 }}>
+            {cookieSummary.categories
+              .filter((c) => c.count > 0)
+              .map((c) => (
+                <li key={c.slug}>
+                  <span>{c.name}</span>
+                  <span>{c.count}</span>
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
 
       <div className="panel-grid">
         <div className="panel-main">

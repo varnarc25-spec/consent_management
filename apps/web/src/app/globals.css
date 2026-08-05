@@ -45,6 +45,12 @@ p { margin: 0 0 1rem; }
   padding: 2rem 1.5rem;
 }
 
+.portal-layout .container.portal-main {
+  max-width: none;
+  width: 100%;
+  padding: 1.75rem 2rem 3rem;
+}
+
 .loading-screen {
   display: flex;
   align-items: center;

@@ -133,6 +133,16 @@ async function fetchText(url: string, timeoutMs = 15000): Promise<string | null>
 export const SCANNER_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
+/** Chromium flags required for headless scans in Docker / Cloud Run. */
+export const CHROMIUM_LAUNCH_ARGS = [
+  '--disable-blink-features=AutomationControlled',
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+  '--disable-software-rasterizer',
+];
+
 function isLocalOrPrivateUrl(url: string) {
   try {
     const host = new URL(url).hostname.toLowerCase();

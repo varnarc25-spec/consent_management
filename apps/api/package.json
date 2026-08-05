@@ -9,7 +9,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist",
     "test": "vitest run",
-    "playwright:install": "playwright install chromium"
+    "playwright:install": "playwright install chromium",
+    "scan:homepage-probe": "tsx scripts/homepage-scan-probe.ts"
   },
   "dependencies": {
     "@cmp/auth": "workspace:*",

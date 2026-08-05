@@ -91,7 +91,22 @@ export class ScansService {
     const summaries = await Promise.all(
       scans.map(async (scan) => {
         if (scan.status !== 'RUNNING') {
-          return this.toSummary(scan);
+          let summary = scan;
+          if (
+            scan.status === 'COMPLETED' &&
+            scan.cookiesFound === 0 &&
+            scan.trackersFound === 0
+          ) {
+            const stats = await this.repos.scans.countFindingStatsForScan(scan.id);
+            if (stats.cookies > 0 || stats.trackers > 0) {
+              summary = {
+                ...scan,
+                cookiesFound: stats.cookies,
+                trackersFound: stats.trackers,
+              };
+            }
+          }
+          return this.toSummary(summary);
         }
         const live = await this.repos.scans.getLiveProgress(scan.id);
         return this.toSummary({
@@ -416,12 +431,40 @@ export class ScansService {
       );
 
       const completedAt = new Date();
+      const durationMs = completedAt.getTime() - startedAt.getTime();
+      const failedPages = result.pageRecords.filter((p) => p.status === 'failed');
+      const okPages = result.pageRecords.filter((p) => p.status === 'ok');
+
+      if (result.pagesScanned > 0 && okPages.length === 0 && failedPages.length > 0) {
+        const pageError =
+          failedPages[0]?.errorMessage ?? 'Page scan failed with no cookie or tracker data';
+        this.logger.error(`Scan ${scanId} failed: ${pageError}`);
+        await this.repos.scans.updateStatus(scanId, 'FAILED', {
+          completedAt,
+          durationMs,
+          pagesScanned: result.pagesScanned,
+          cookiesFound: 0,
+          trackersFound: 0,
+          errorMessage: pageError,
+        });
+        void this.webhookDelivery.emit(scan.organizationId, 'scan.failed', {
+          scanId,
+          domainId: scan.domainId,
+          errorMessage: pageError,
+        });
+        return;
+      }
+
+      const dbStats = await this.repos.scans.countFindingStatsForScan(scanId);
+      const cookiesFound = Math.max(result.cookiesFound, dbStats.cookies);
+      const trackersFound = Math.max(result.trackersFound, dbStats.trackers);
+
       await this.repos.scans.updateStatus(scanId, 'COMPLETED', {
         completedAt,
-        durationMs: completedAt.getTime() - startedAt.getTime(),
+        durationMs,
         pagesScanned: result.pagesScanned,
-        cookiesFound: result.cookiesFound,
-        trackersFound: result.trackersFound,
+        cookiesFound,
+        trackersFound,
       });
 
       try {
@@ -439,9 +482,9 @@ export class ScansService {
         scanId,
         domainId: scan.domainId,
         pagesScanned: result.pagesScanned,
-        cookiesFound: result.cookiesFound,
-        trackersFound: result.trackersFound,
-        durationMs: completedAt.getTime() - startedAt.getTime(),
+        cookiesFound,
+        trackersFound,
+        durationMs,
       });
     } catch (error) {
       if (error instanceof ScanCancelledError) {
