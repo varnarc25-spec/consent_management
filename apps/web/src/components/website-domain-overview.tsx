@@ -140,8 +140,8 @@ export function WebsiteDomainOverview({
       method: 'POST',
       body: JSON.stringify({
         startUrl: `https://${hostname}/`,
-        maxPages: Math.min(10, scanLimit),
-        maxDepth: 2,
+        maxPages: scanLimit,
+        maxDepth: 3,
         timeoutMs: 30000,
         jsRendering: true,
         deviceType: 'desktop',

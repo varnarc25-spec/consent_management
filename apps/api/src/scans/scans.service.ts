@@ -242,7 +242,8 @@ export class ScansService {
             domain.id,
             {
               startUrl: buildStartUrl(domain.hostname),
-              maxDepth: 2,
+              maxPages: domain.scanLimit,
+              maxDepth: 3,
               timeoutMs: 30000,
               jsRendering: true,
               deviceType: 'desktop',

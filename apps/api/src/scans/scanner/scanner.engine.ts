@@ -8,10 +8,12 @@ import {
   domSnapshotToFindings,
 } from './capture.util';
 import {
-  extractLinks,
+  discoverSitemapUrls,
+  enqueueDiscoveredLinks,
   getHostname,
   isSameSite,
   matchesPathRules,
+  mergeDiscoveredLinks,
   normalizeUrl,
 } from './crawl.util';
 import { isTrackingPixelUrl } from './tracker-patterns';
@@ -117,6 +119,29 @@ async function captureDomSnapshot(page: Page, networkUrls: string[]) {
   }, networkUrls);
 }
 
+async function navigateForScan(
+  page: Page,
+  url: string,
+  jsRendering: boolean,
+  timeoutMs: number,
+) {
+  await page.goto(url, {
+    waitUntil: jsRendering ? 'load' : 'domcontentloaded',
+    timeout: timeoutMs,
+  });
+  if (jsRendering) {
+    await page.waitForTimeout(1500);
+  }
+}
+
+async function extractAnchorHrefs(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    Array.from(document.querySelectorAll('a[href]'))
+      .map((anchor) => anchor.getAttribute('href') ?? '')
+      .filter(Boolean),
+  );
+}
+
 async function clickCmpAction(page: Page, action: string) {
   const selector = `[data-cmp-action="${action}"]`;
   const button = page.locator(selector).first();
@@ -186,6 +211,16 @@ export async function runWebsiteScan(scan: DomainScan): Promise<ScanRunResult> {
   const pageRecords: ScanRunResult['pageRecords'] = [];
   let pagesScanned = 0;
 
+  const sitemapUrls = await discoverSitemapUrls(scan.startUrl, siteHostname);
+  enqueueDiscoveredLinks(
+    sitemapUrls,
+    1,
+    seen,
+    queue,
+    includePaths,
+    excludePaths,
+  );
+
   try {
     while (queue.length > 0 && pagesScanned < scan.maxPages) {
       const current = queue.shift()!;
@@ -212,14 +247,17 @@ export async function runWebsiteScan(scan: DomainScan): Promise<ScanRunResult> {
       let pageStatus = 'ok';
       let errorMessage: string | null = null;
       const pageFindings: ScanFindingInput[] = [];
+      let discoveredLinks: string[] = [];
 
       try {
-        await page.goto(normalized, {
-          waitUntil: scan.jsRendering ? 'networkidle' : 'domcontentloaded',
-          timeout: scan.timeoutMs,
-        });
+        await navigateForScan(page, normalized, scan.jsRendering, scan.timeoutMs);
 
         const pageIdPlaceholder = null;
+        const html = await page.content();
+        const anchorHrefs = await extractAnchorHrefs(page);
+        if (current.depth < scan.maxDepth) {
+          discoveredLinks = mergeDiscoveredLinks(html, anchorHrefs, normalized, siteHostname);
+        }
 
         pageFindings.push(
           ...(await scanPageState(
@@ -248,38 +286,45 @@ export async function runWebsiteScan(scan: DomainScan): Promise<ScanRunResult> {
           );
         }
 
-        await page.goto(normalized, {
-          waitUntil: scan.jsRendering ? 'networkidle' : 'domcontentloaded',
-          timeout: scan.timeoutMs,
-        });
-        const rejected = await clickCmpAction(page, 'reject-all');
-        if (rejected) {
-          pageFindings.push(
-            ...(await scanPageState(
-              page,
-              context,
-              'AFTER_REJECT',
-              normalized,
-              pageIdPlaceholder,
-              siteHostname,
-              networkUrls,
-            )),
-          );
-        }
-
-        if (current.depth < scan.maxDepth) {
-          const html = await page.content();
-          const links = extractLinks(html, normalized, siteHostname);
-          for (const link of links) {
-            if (!seen.has(link)) {
-              queue.push({ url: link, depth: current.depth + 1 });
-            }
+        try {
+          await navigateForScan(page, normalized, scan.jsRendering, scan.timeoutMs);
+          const rejected = await clickCmpAction(page, 'reject-all');
+          if (rejected) {
+            pageFindings.push(
+              ...(await scanPageState(
+                page,
+                context,
+                'AFTER_REJECT',
+                normalized,
+                pageIdPlaceholder,
+                siteHostname,
+                networkUrls,
+              )),
+            );
+          }
+        } catch (rejectError) {
+          // Reject-state capture is optional; keep discovered links from the first load.
+          if (!errorMessage) {
+            errorMessage =
+              rejectError instanceof Error
+                ? `Reject capture failed: ${rejectError.message}`
+                : 'Reject capture failed';
           }
         }
       } catch (error) {
         pageStatus = 'failed';
         errorMessage = error instanceof Error ? error.message : 'Page scan failed';
       } finally {
+        if (discoveredLinks.length > 0) {
+          enqueueDiscoveredLinks(
+            discoveredLinks,
+            current.depth + 1,
+            seen,
+            queue,
+            includePaths,
+            excludePaths,
+          );
+        }
         page.off('request', onRequest);
       }
 

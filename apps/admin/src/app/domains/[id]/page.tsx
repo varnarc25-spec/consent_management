@@ -311,8 +311,8 @@ export default function DomainDetailPage() {
       method: 'POST',
       body: JSON.stringify({
         startUrl: `https://${domain.hostname}/`,
-        maxPages: Math.min(10, domain.scanLimit),
-        maxDepth: 2,
+        maxPages: domain.scanLimit,
+        maxDepth: 3,
         timeoutMs: 30000,
         jsRendering: true,
         deviceType: 'desktop',

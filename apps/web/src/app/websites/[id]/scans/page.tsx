@@ -75,8 +75,8 @@ export default function WebsiteScansPage() {
       method: 'POST',
       body: JSON.stringify({
         startUrl: domain ? `https://${domain.hostname}/` : undefined,
-        maxPages: Math.min(10, domain?.scanLimit ?? 10),
-        maxDepth: 2,
+        maxPages: domain?.scanLimit ?? 10,
+        maxDepth: 3,
         jsRendering: true,
         deviceType: 'desktop',
       }),
@@ -135,7 +135,7 @@ export default function WebsiteScansPage() {
       <div className="card" style={{ marginTop: '1.5rem' }}>
         <h3>Start scan</h3>
         <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
-          Runs a quick crawl (up to {Math.min(10, domain?.scanLimit ?? 10)} pages) with JavaScript rendering.
+          Runs a crawl (up to {domain?.scanLimit ?? 10} pages) with JavaScript rendering.
         </p>
         <button className="btn" type="button" disabled={starting || !domain} onClick={startScan}>
           {starting ? 'Starting…' : 'Start scan'}

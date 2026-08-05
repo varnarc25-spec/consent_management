@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildStartUrl,
+  enqueueDiscoveredLinks,
   extractLinks,
   isSameSite,
   matchesPathRules,
+  mergeDiscoveredLinks,
   normalizeUrl,
 } from './crawl.util';
 
@@ -19,16 +21,30 @@ describe('crawl.util', () => {
     expect(matchesPathRules('/docs', ['/blog'])).toBe(false);
   });
 
-  it('extracts same-site links from HTML', () => {
-    const html = `
-      <a href="/about">About</a>
-      <a href="https://example.com/contact">Contact</a>
-      <a href="https://other.com/page">External</a>
-    `;
-    const links = extractLinks(html, 'https://example.com/', 'example.com');
+  it('merges DOM anchor hrefs with HTML extraction', () => {
+    const links = mergeDiscoveredLinks(
+      '<a href="/about">About</a>',
+      ['/contact', 'https://other.com/page'],
+      'https://example.com/',
+      'example.com',
+    );
     expect(links).toContain('https://example.com/about');
     expect(links).toContain('https://example.com/contact');
     expect(links.some((link) => link.includes('other.com'))).toBe(false);
+  });
+
+  it('enqueueDiscoveredLinks respects path rules and seen set', () => {
+    const seen = new Set<string>(['https://example.com/about']);
+    const queue: Array<{ url: string; depth: number }> = [];
+    enqueueDiscoveredLinks(
+      ['https://example.com/about', 'https://example.com/blog/post', 'https://example.com/private'],
+      1,
+      seen,
+      queue,
+      ['/blog'],
+      ['/blog/private'],
+    );
+    expect(queue).toEqual([{ url: 'https://example.com/blog/post', depth: 1 }]);
   });
 
   it('detects same-site hostnames', () => {
