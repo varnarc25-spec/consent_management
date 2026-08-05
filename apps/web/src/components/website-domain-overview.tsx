@@ -226,6 +226,11 @@ export function WebsiteDomainOverview({
                   : 'Not scheduled'}
               </span>
             </div>
+            {lastCompletedScan?.errorMessage && (
+              <p className="error" style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>
+                {lastCompletedScan.errorMessage}
+              </p>
+            )}
             {lastCompletedScan && (
               <div className="domain-stat-row">
                 <span className="domain-stat-label">Scanned subpages</span>

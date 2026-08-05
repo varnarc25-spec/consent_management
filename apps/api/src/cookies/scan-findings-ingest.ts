@@ -71,6 +71,51 @@ export function isStorageFindingType(findingType: ScanFindingType) {
   return ['LOCAL_STORAGE', 'SESSION_STORAGE', 'INDEXED_DB'].includes(findingType);
 }
 
+function isFirstPartyHost(hostname: string, siteHostname: string) {
+  const host = hostname.toLowerCase();
+  const site = siteHostname.toLowerCase();
+  return host === site || host.endsWith(`.${site}`);
+}
+
+/** Skip first-party app bundles; keep cookies, storage, and third-party / known trackers. */
+export function shouldIncludeInInventory(
+  finding: {
+    findingType: ScanFindingType;
+    name: string;
+    sourceUrl: string | null;
+    isThirdParty: boolean | null;
+    metadata: unknown;
+  },
+  siteHostname: string,
+): boolean {
+  if (!INGESTIBLE_FINDING_TYPES.includes(finding.findingType)) return false;
+
+  if (finding.findingType === 'COOKIE' || isStorageFindingType(finding.findingType)) {
+    return true;
+  }
+
+  const candidateUrl =
+    finding.sourceUrl ??
+    (finding.name.startsWith('http://') || finding.name.startsWith('https://') ? finding.name : null);
+
+  if (candidateUrl && matchTracker(candidateUrl)) return true;
+  if (matchTracker(finding.name)) return true;
+  if (finding.isThirdParty) return true;
+
+  if (finding.name === 'inline-script') return false;
+
+  if (candidateUrl && siteHostname) {
+    try {
+      const host = new URL(candidateUrl).hostname;
+      if (isFirstPartyHost(host, siteHostname)) return false;
+    } catch {
+      /* ignore invalid URL */
+    }
+  }
+
+  return Boolean(candidateUrl);
+}
+
 export function groupScanFindingsForIngest(
   findings: Array<{
     findingType: ScanFindingType;

@@ -199,14 +199,40 @@ async function extractAnchorHrefs(page: Page): Promise<string[]> {
 async function clickCmpAction(page: Page, action: string) {
   const selector = `[data-cmp-action="${action}"]`;
   const button = page.locator(selector).first();
-  if (await button.count() === 0) return false;
-  try {
-    await button.click({ timeout: 3000 });
-    await page.waitForTimeout(800);
-    return true;
-  } catch {
-    return false;
+  if (await button.count() > 0) {
+    try {
+      await button.click({ timeout: 3000 });
+      await page.waitForTimeout(800);
+      return true;
+    } catch {
+      /* fall through to SDK API */
+    }
   }
+
+  const sdkAction =
+    action === 'accept-all'
+      ? 'acceptAll'
+      : action === 'reject-all'
+        ? 'rejectAll'
+        : null;
+  if (!sdkAction) return false;
+
+  try {
+    const invoked = await page.evaluate((method) => {
+      const cmp = (window as unknown as { __CMP__?: Record<string, () => void> }).__CMP__;
+      if (!cmp || typeof cmp[method] !== 'function') return false;
+      cmp[method]();
+      return true;
+    }, sdkAction);
+    if (invoked) {
+      await page.waitForTimeout(1000);
+      return true;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return false;
 }
 
 async function scanPageState(

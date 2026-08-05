@@ -21,7 +21,9 @@ import {
   groupScanFindingsForIngest,
   isTrackerFindingType,
   resolveTrackerCategory,
+  shouldIncludeInInventory,
 } from './scan-findings-ingest';
+import { getHostname } from '../scans/scanner/crawl.util';
 
 @Injectable()
 export class CookiesService {
@@ -159,8 +161,17 @@ export class CookiesService {
     const scan = await this.repos.scans.findById(scanId);
     if (!scan) return;
 
+    const siteHostname = getHostname(scan.startUrl) ?? '';
+    const inventoryFindings = scan.findings.filter((finding) =>
+      shouldIncludeInInventory(finding, siteHostname),
+    );
+    const grouped = groupScanFindingsForIngest(inventoryFindings);
+
+    if (grouped.length === 0) {
+      return;
+    }
+
     const definitions = await this.repos.cookies.listDefinitions(scan.organizationId);
-    const grouped = groupScanFindingsForIngest(scan.findings);
 
     for (const entry of grouped) {
       const match = matchCookieDefinition(definitions, {

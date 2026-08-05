@@ -3,6 +3,7 @@ import {
   buildInventoryKey,
   groupScanFindingsForIngest,
   resolveTrackerCategory,
+  shouldIncludeInInventory,
 } from '../src/cookies/scan-findings-ingest';
 
 describe('scan-findings-ingest', () => {
@@ -82,5 +83,47 @@ describe('scan-findings-ingest', () => {
     expect(resolveTrackerCategory('Meta Pixel', 'https://connect.facebook.net/en_US/fbevents.js')).toBe(
       'marketing',
     );
+  });
+
+  it('filters first-party app scripts from cookie inventory ingest', () => {
+    expect(
+      shouldIncludeInInventory(
+        {
+          findingType: 'SCRIPT',
+          name: 'https://varnarc.com/_next/static/chunks/main-app.js',
+          sourceUrl: 'https://varnarc.com/_next/static/chunks/main-app.js',
+          isThirdParty: false,
+          metadata: null,
+        },
+        'varnarc.com',
+      ),
+    ).toBe(false);
+
+    expect(
+      shouldIncludeInInventory(
+        {
+          findingType: 'SCRIPT',
+          name: 'CMP SDK',
+          sourceUrl:
+            'https://consent-management-api-414895350436.us-central1.run.app/api/v1/public/cmp/sdk.js',
+          isThirdParty: true,
+          metadata: null,
+        },
+        'varnarc.com',
+      ),
+    ).toBe(true);
+
+    expect(
+      shouldIncludeInInventory(
+        {
+          findingType: 'LOCAL_STORAGE',
+          name: 'vn_analytics_session',
+          sourceUrl: null,
+          isThirdParty: false,
+          metadata: null,
+        },
+        'varnarc.com',
+      ),
+    ).toBe(true);
   });
 });
