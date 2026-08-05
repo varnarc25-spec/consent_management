@@ -46,6 +46,47 @@ export type ScanPageProgressHandler = (
   progress: ScanProgressUpdate,
 ) => Promise<void>;
 
+export class ScanCancelledError extends Error {
+  constructor() {
+    super('Scan cancelled');
+    this.name = 'ScanCancelledError';
+  }
+}
+
+export interface RunWebsiteScanOptions {
+  isCancelled?: () => boolean;
+}
+
+async function withTimeout<T>(label: string, timeoutMs: number, fn: () => Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
+      timeoutMs,
+    );
+  });
+  try {
+    return await Promise.race([fn(), timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function waitForCmpSdk(page: Page, timeoutMs = 15000) {
+  try {
+    await page.waitForFunction(
+      () => {
+        const cmp = (window as unknown as { __CMP__?: { ready?: boolean; acceptAll?: () => void } }).__CMP__;
+        return Boolean(cmp?.ready || typeof cmp?.acceptAll === 'function');
+      },
+      { timeout: timeoutMs },
+    );
+    await page.waitForTimeout(500);
+  } catch {
+    /* CMP may not be installed on this site */
+  }
+}
+
 async function loadPlaywright() {
   if (!process.env.PLAYWRIGHT_BROWSERS_PATH && process.env.NODE_ENV === 'production') {
     process.env.PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright';
@@ -204,6 +245,7 @@ async function scanPageState(
 export async function runWebsiteScan(
   scan: DomainScan,
   onPageScanned?: ScanPageProgressHandler,
+  options?: RunWebsiteScanOptions,
 ): Promise<ScanRunResult> {
   const playwright = await loadPlaywright();
   const includePaths = (scan.includePaths as string[] | null) ?? undefined;
@@ -250,8 +292,14 @@ export async function runWebsiteScan(
 
   const startNormalized = normalizeUrl(scan.startUrl);
 
+  const pageBudgetMs = Math.min(scan.timeoutMs * 4, 120_000);
+
   try {
     while (queue.length > 0 && pagesScanned < scan.maxPages) {
+      if (options?.isCancelled?.()) {
+        throw new ScanCancelledError();
+      }
+
       const current = queue.shift()!;
       const normalized = normalizeUrl(current.url);
       if (!normalized || seen.has(normalized)) continue;
@@ -279,55 +327,43 @@ export async function runWebsiteScan(
       let discoveredLinks: string[] = [];
 
       try {
-        await navigateForScan(page, normalized, scan.jsRendering, scan.timeoutMs);
+        await withTimeout('page scan', pageBudgetMs, async () => {
+          await navigateForScan(page, normalized, scan.jsRendering, scan.timeoutMs);
 
-        const pageIdPlaceholder = null;
-        const html = await page.content();
-        const anchorHrefs = await extractAnchorHrefs(page);
-        if (current.depth < scan.maxDepth) {
-          discoveredLinks = mergeDiscoveredLinks(html, anchorHrefs, normalized, siteHostname);
-        }
-
-        const runFullConsentProbe =
-          startNormalized !== null && normalized === startNormalized;
-
-        pageFindings.push(
-          ...(await scanPageState(
-            page,
-            context,
-            'BEFORE_CONSENT',
-            normalized,
-            pageIdPlaceholder,
-            siteHostname,
-            networkUrls,
-          )),
-        );
-
-        if (runFullConsentProbe) {
-          const accepted = await clickCmpAction(page, 'accept-all');
-          if (accepted) {
-            pageFindings.push(
-              ...(await scanPageState(
-                page,
-                context,
-                'AFTER_ACCEPT',
-                normalized,
-                pageIdPlaceholder,
-                siteHostname,
-                networkUrls,
-              )),
-            );
+          const runFullConsentProbe =
+            startNormalized !== null && normalized === startNormalized;
+          if (runFullConsentProbe) {
+            await waitForCmpSdk(page, Math.min(scan.timeoutMs, 15000));
           }
 
-          try {
-            await navigateForScan(page, normalized, scan.jsRendering, scan.timeoutMs);
-            const rejected = await clickCmpAction(page, 'reject-all');
-            if (rejected) {
+          const pageIdPlaceholder = null;
+          const html = await page.content();
+          const anchorHrefs = await extractAnchorHrefs(page);
+          if (current.depth < scan.maxDepth) {
+            discoveredLinks = mergeDiscoveredLinks(html, anchorHrefs, normalized, siteHostname);
+          }
+
+          pageFindings.push(
+            ...(await scanPageState(
+              page,
+              context,
+              'BEFORE_CONSENT',
+              normalized,
+              pageIdPlaceholder,
+              siteHostname,
+              networkUrls,
+            )),
+          );
+
+          if (runFullConsentProbe) {
+            const accepted = await clickCmpAction(page, 'accept-all');
+            if (accepted) {
+              await page.waitForTimeout(1000);
               pageFindings.push(
                 ...(await scanPageState(
                   page,
                   context,
-                  'AFTER_REJECT',
+                  'AFTER_ACCEPT',
                   normalized,
                   pageIdPlaceholder,
                   siteHostname,
@@ -335,15 +371,35 @@ export async function runWebsiteScan(
                 )),
               );
             }
-          } catch (rejectError) {
-            if (!errorMessage) {
-              errorMessage =
-                rejectError instanceof Error
-                  ? `Reject capture failed: ${rejectError.message}`
-                  : 'Reject capture failed';
+
+            try {
+              await navigateForScan(page, normalized, scan.jsRendering, scan.timeoutMs);
+              await waitForCmpSdk(page, 5000);
+              const rejected = await clickCmpAction(page, 'reject-all');
+              if (rejected) {
+                await page.waitForTimeout(800);
+                pageFindings.push(
+                  ...(await scanPageState(
+                    page,
+                    context,
+                    'AFTER_REJECT',
+                    normalized,
+                    pageIdPlaceholder,
+                    siteHostname,
+                    networkUrls,
+                  )),
+                );
+              }
+            } catch (rejectError) {
+              if (!errorMessage) {
+                errorMessage =
+                  rejectError instanceof Error
+                    ? `Reject capture failed: ${rejectError.message}`
+                    : 'Reject capture failed';
+              }
             }
           }
-        }
+        });
       } catch (error) {
         pageStatus = 'failed';
         errorMessage = error instanceof Error ? error.message : 'Page scan failed';

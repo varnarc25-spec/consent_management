@@ -36,6 +36,7 @@ export default function WebsiteScansPage() {
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   function loadScans(silent = false) {
     return apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`, { silent }).then((r) => {
@@ -97,6 +98,28 @@ export default function WebsiteScansPage() {
     }
   }
 
+  async function cancelScan(scanId: string) {
+    setCancellingId(scanId);
+    setMessage('');
+    setError('');
+    const sessionOk = await ensureApiSession();
+    if (!sessionOk) {
+      setCancellingId(null);
+      setError('Session expired. Please sign in again.');
+      return;
+    }
+    const result = await apiFetch<ScanSummary>(`/domains/${domainId}/scans/${scanId}/cancel`, {
+      method: 'POST',
+    });
+    setCancellingId(null);
+    if (result.ok) {
+      setMessage('Scan stopped');
+      await loadScans(true);
+    } else {
+      setError(result.error?.message ?? 'Failed to stop scan');
+    }
+  }
+
   async function retryScan(scanId: string) {
     setRetryingId(scanId);
     setMessage('');
@@ -152,14 +175,29 @@ export default function WebsiteScansPage() {
         <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
           Runs a crawl (up to {domain?.scanLimit ?? 10} pages) with JavaScript rendering.
         </p>
-        <button
-          className="btn"
-          type="button"
-          disabled={starting || !domain || hasRunningScan}
-          onClick={startScan}
-        >
-          {starting ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Start scan'}
-        </button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+          <button
+            className="btn"
+            type="button"
+            disabled={starting || !domain || hasRunningScan}
+            onClick={startScan}
+          >
+            {starting ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Start scan'}
+          </button>
+          {hasRunningScan && (
+            <button
+              className="btn btn-secondary"
+              type="button"
+              disabled={cancellingId !== null}
+              onClick={() => {
+                const running = scans.find((s) => s.status === 'RUNNING');
+                if (running) cancelScan(running.id);
+              }}
+            >
+              {cancellingId ? 'Stopping…' : 'Stop scan'}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="card" style={{ marginTop: '1.5rem' }}>
@@ -227,14 +265,24 @@ export default function WebsiteScansPage() {
                   <td>{scan.trackersFound}</td>
                   <td>{formatDuration(scan.durationMs)}</td>
                   <td>
-                    {scan.status === 'FAILED' && (
+                    {scan.status === 'RUNNING' && (
+                      <button
+                        className="btn-link"
+                        type="button"
+                        disabled={cancellingId === scan.id}
+                        onClick={() => cancelScan(scan.id)}
+                      >
+                        {cancellingId === scan.id ? 'Stopping…' : 'Stop'}
+                      </button>
+                    )}
+                    {(scan.status === 'FAILED' || scan.status === 'CANCELLED') && (
                       <button
                         className="btn-link"
                         type="button"
                         disabled={retryingId === scan.id || hasRunningScan}
                         onClick={() => retryScan(scan.id)}
                       >
-                        {retryingId === scan.id ? 'Retrying…' : 'Retry'}
+                        {retryingId === scan.id ? 'Restarting…' : 'Run again'}
                       </button>
                     )}
                   </td>

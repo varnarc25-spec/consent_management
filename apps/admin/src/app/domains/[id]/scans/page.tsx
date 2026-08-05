@@ -39,6 +39,7 @@ export default function DomainScansPage() {
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     startUrl: '',
     maxPages: 10,
@@ -115,6 +116,22 @@ export default function DomainScansPage() {
       await loadScans(true);
     } else {
       setError(result.error?.message ?? 'Failed to start scan');
+    }
+  }
+
+  async function cancelScan(scanId: string) {
+    setCancellingId(scanId);
+    setMessage('');
+    setError('');
+    const result = await apiFetch<ScanSummary>(`/domains/${domainId}/scans/${scanId}/cancel`, {
+      method: 'POST',
+    });
+    setCancellingId(null);
+    if (result.ok) {
+      setMessage('Scan stopped');
+      await loadScans(true);
+    } else {
+      setError(result.error?.message ?? 'Failed to stop scan');
     }
   }
 
@@ -255,6 +272,20 @@ export default function DomainScansPage() {
         <button className="btn" type="submit" disabled={starting || hasRunningScan}>
           {starting ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Start scan'}
         </button>
+        {hasRunningScan && (
+          <button
+            className="btn btn-secondary"
+            type="button"
+            style={{ marginLeft: '0.75rem' }}
+            disabled={cancellingId !== null}
+            onClick={() => {
+              const running = scans.find((s) => s.status === 'RUNNING');
+              if (running) cancelScan(running.id);
+            }}
+          >
+            {cancellingId ? 'Stopping…' : 'Stop scan'}
+          </button>
+        )}
       </form>
 
       <div className="card" style={{ marginTop: '1.5rem' }}>
@@ -323,7 +354,20 @@ export default function DomainScansPage() {
                   <td>{formatDuration(scan.durationMs)}</td>
                   <td>
                     <Link href={`/domains/${domainId}/scans/${scan.id}`}>View results</Link>
-                    {scan.status === 'FAILED' && (
+                    {scan.status === 'RUNNING' && (
+                      <>
+                        {' · '}
+                        <button
+                          className="btn-link"
+                          type="button"
+                          disabled={cancellingId === scan.id}
+                          onClick={() => cancelScan(scan.id)}
+                        >
+                          {cancellingId === scan.id ? 'Stopping…' : 'Stop'}
+                        </button>
+                      </>
+                    )}
+                    {(scan.status === 'FAILED' || scan.status === 'CANCELLED') && (
                       <>
                         {' · '}
                         <button
@@ -332,7 +376,7 @@ export default function DomainScansPage() {
                           disabled={retryingId === scan.id || hasRunningScan}
                           onClick={() => retryScan(scan.id)}
                         >
-                          {retryingId === scan.id ? 'Retrying…' : 'Retry'}
+                          {retryingId === scan.id ? 'Restarting…' : 'Run again'}
                         </button>
                       </>
                     )}

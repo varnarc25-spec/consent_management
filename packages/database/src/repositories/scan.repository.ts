@@ -61,9 +61,24 @@ export class ScanRepository {
   }
 
   async expireStaleRunningScans(domainId?: string, maxAgeMs = 30 * 60 * 1000) {
+    const stalledCutoff = new Date(Date.now() - 10 * 60 * 1000);
     const zeroProgressCutoff = new Date(Date.now() - 10 * 60 * 1000);
     const cutoff = new Date(Date.now() - maxAgeMs);
     const domainFilter = domainId ? { domainId } : {};
+
+    await this.prisma.domainScan.updateMany({
+      where: {
+        status: 'RUNNING',
+        updatedAt: { lt: stalledCutoff },
+        ...domainFilter,
+      },
+      data: {
+        status: 'FAILED',
+        errorMessage:
+          'Scan stalled with no progress for 10 minutes. Stop the scan and start a new one.',
+        completedAt: new Date(),
+      },
+    });
 
     await this.prisma.domainScan.updateMany({
       where: {
@@ -196,6 +211,39 @@ export class ScanRepository {
         metadata: finding.metadata,
       })),
     });
+  }
+
+  async countFindingStatsForScan(scanId: string) {
+    const rows = await this.prisma.domainScanFinding.groupBy({
+      by: ['findingType'],
+      where: { scanId },
+      _count: { _all: true },
+    });
+
+    let cookies = 0;
+    let trackers = 0;
+    for (const row of rows) {
+      if (['COOKIE', 'LOCAL_STORAGE', 'SESSION_STORAGE', 'INDEXED_DB'].includes(row.findingType)) {
+        cookies += row._count._all;
+      }
+      if (
+        ['SCRIPT', 'IFRAME', 'PIXEL', 'NETWORK_REQUEST', 'SERVICE_WORKER'].includes(row.findingType)
+      ) {
+        trackers += row._count._all;
+      }
+    }
+
+    return { cookies, trackers };
+  }
+
+  async getLiveProgress(scanId: string) {
+    const pagesScanned = await this.prisma.domainScanPage.count({ where: { scanId } });
+    const stats = await this.countFindingStatsForScan(scanId);
+    return {
+      pagesScanned,
+      cookiesFound: stats.cookies,
+      trackersFound: stats.trackers,
+    };
   }
 
   findLatestForOrganization(organizationId: string) {

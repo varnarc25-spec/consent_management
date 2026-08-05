@@ -74,4 +74,15 @@ export class ScansController {
   ) {
     return this.scansService.retryScan(user, domainId, scanId, meta(req)).then(ok);
   }
+
+  @Post(':scanId/cancel')
+  @RequirePermissions(PERMISSIONS.SCAN_RUN, PERMISSIONS.DOMAIN_MANAGE)
+  cancel(
+    @CurrentUserDecorator() user: CurrentUser,
+    @Param('domainId') domainId: string,
+    @Param('scanId') scanId: string,
+    @Req() req: Request,
+  ) {
+    return this.scansService.cancelScan(user, domainId, scanId, meta(req)).then(ok);
+  }
 }

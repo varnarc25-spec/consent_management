@@ -15,7 +15,7 @@ import { AuditService } from '../audit/audit.service';
 import type { AuditMeta } from '../organizations/organizations.service';
 import { CookiesService } from '../cookies/cookies.service';
 import { WebhookDeliveryService } from '../webhooks/webhook-delivery.service';
-import { runWebsiteScan } from './scanner/scanner.engine';
+import { runWebsiteScan, ScanCancelledError } from './scanner/scanner.engine';
 import { buildStartUrl } from './scanner/crawl.util';
 import { nextScanAtFromFrequency } from '../domains/domains.service';
 
@@ -75,6 +75,7 @@ export interface ScanDetailResponse extends ScanSummaryResponse {
 export class ScansService {
   private readonly logger = new Logger(ScansService.name);
   private readonly activeScans = new Set<string>();
+  private readonly cancelRequests = new Set<string>();
 
   constructor(
     @Inject(REPOS) private readonly repos: Repositories,
@@ -87,7 +88,21 @@ export class ScansService {
     const domain = await this.getDomainForUser(user, domainId);
     await this.repos.scans.expireStaleRunningScans(domain.id, 30 * 60 * 1000);
     const scans = await this.repos.scans.listByDomain(domain.id);
-    return scans.map((scan) => this.toSummary(scan));
+    const summaries = await Promise.all(
+      scans.map(async (scan) => {
+        if (scan.status !== 'RUNNING') {
+          return this.toSummary(scan);
+        }
+        const live = await this.repos.scans.getLiveProgress(scan.id);
+        return this.toSummary({
+          ...scan,
+          pagesScanned: Math.max(scan.pagesScanned, live.pagesScanned),
+          cookiesFound: live.cookiesFound,
+          trackersFound: live.trackersFound,
+        });
+      }),
+    );
+    return summaries;
   }
 
   async get(user: CurrentUser, domainId: string, scanId: string): Promise<ScanDetailResponse> {
@@ -184,10 +199,10 @@ export class ScansService {
     if (!failedScan || failedScan.domainId !== domain.id) {
       throw new NotFoundException({ code: 'SCAN_NOT_FOUND', message: 'Scan not found' });
     }
-    if (failedScan.status !== 'FAILED') {
+    if (failedScan.status !== 'FAILED' && failedScan.status !== 'CANCELLED') {
       throw new BadRequestException({
-        code: 'SCAN_NOT_FAILED',
-        message: 'Only failed scans can be retried',
+        code: 'SCAN_NOT_RETRYABLE',
+        message: 'Only failed or cancelled scans can be retried',
       });
     }
 
@@ -238,6 +253,66 @@ export class ScansService {
       retriedFromScanId: scanId,
     });
     return this.toSummary(scan);
+  }
+
+  async cancelScan(
+    user: CurrentUser,
+    domainId: string,
+    scanId: string,
+    meta: AuditMeta,
+  ): Promise<ScanSummaryResponse> {
+    const domain = await this.getDomainForUser(user, domainId);
+    const scan = await this.repos.scans.findById(scanId);
+    if (!scan || scan.domainId !== domain.id) {
+      throw new NotFoundException({ code: 'SCAN_NOT_FOUND', message: 'Scan not found' });
+    }
+    if (scan.status !== 'PENDING' && scan.status !== 'RUNNING') {
+      throw new BadRequestException({
+        code: 'SCAN_NOT_RUNNING',
+        message: 'Only pending or running scans can be stopped',
+      });
+    }
+
+    this.cancelRequests.add(scanId);
+    const durationMs = scan.startedAt ? Date.now() - scan.startedAt.getTime() : undefined;
+    const live = await this.repos.scans.getLiveProgress(scanId);
+    const updated = await this.repos.scans.updateStatus(scanId, 'CANCELLED', {
+      completedAt: new Date(),
+      durationMs,
+      pagesScanned: Math.max(scan.pagesScanned, live.pagesScanned),
+      cookiesFound: live.cookiesFound,
+      trackersFound: live.trackersFound,
+      errorMessage: 'Cancelled by user',
+    });
+
+    this.activeScans.delete(scanId);
+
+    try {
+      await this.cookiesService.ingestScanResults(scanId);
+    } catch (ingestError) {
+      this.logger.warn(
+        `Partial ingest after cancel ${scanId}: ${
+          ingestError instanceof Error ? ingestError.message : String(ingestError)
+        }`,
+      );
+    }
+
+    await this.auditService.log({
+      userId: user.id,
+      organizationId: user.organizationId,
+      action: 'scan.cancelled',
+      module: 'scanner',
+      previousValue: { scanId, status: scan.status },
+      newValue: { scanId, status: 'CANCELLED' },
+      ...meta,
+    });
+
+    void this.webhookDelivery.emit(scan.organizationId, 'scan.cancelled', {
+      scanId,
+      domainId: domain.id,
+    });
+
+    return this.toSummary(updated);
   }
 
   async runDueScans() {
@@ -293,29 +368,52 @@ export class ScansService {
       const scan = await this.repos.scans.findById(scanId);
       if (!scan) return;
 
+      if (this.cancelRequests.has(scanId)) {
+        return;
+      }
+
       await this.repos.scans.updateStatus(scanId, 'RUNNING', { startedAt });
 
-      const result = await runWebsiteScan(scan, async (pageRecord, progress) => {
-        const page = await this.repos.scans.createPage(scanId, {
-          url: pageRecord.url,
-          canonicalUrl: pageRecord.canonicalUrl,
-          status: pageRecord.status,
-          depth: pageRecord.depth,
-          errorMessage: pageRecord.errorMessage,
-        });
+      const result = await runWebsiteScan(
+        scan,
+        async (pageRecord, progress) => {
+          try {
+            const page = await this.repos.scans.createPage(scanId, {
+              url: pageRecord.url,
+              canonicalUrl: pageRecord.canonicalUrl,
+              status: pageRecord.status,
+              depth: pageRecord.depth,
+              errorMessage: pageRecord.errorMessage,
+            });
 
-        const findings = pageRecord.findings.map((finding) => ({
-          ...finding,
-          pageId: page.id,
-        }));
-        await this.repos.scans.createFindings(scanId, findings);
+            const findings = pageRecord.findings.map((finding) => ({
+              ...finding,
+              pageId: page.id,
+            }));
+            if (findings.length > 0) {
+              await this.repos.scans.createFindings(scanId, findings);
+            }
 
-        await this.repos.scans.updateStatus(scanId, 'RUNNING', {
-          pagesScanned: progress.pagesScanned,
-          cookiesFound: progress.cookiesFound,
-          trackersFound: progress.trackersFound,
-        });
-      });
+            await this.repos.scans.updateStatus(scanId, 'RUNNING', {
+              pagesScanned: progress.pagesScanned,
+              cookiesFound: progress.cookiesFound,
+              trackersFound: progress.trackersFound,
+            });
+          } catch (pageError) {
+            this.logger.error(
+              `Scan ${scanId} page persist failed: ${
+                pageError instanceof Error ? pageError.message : String(pageError)
+              }`,
+            );
+            await this.repos.scans.updateStatus(scanId, 'RUNNING', {
+              pagesScanned: progress.pagesScanned,
+              cookiesFound: progress.cookiesFound,
+              trackersFound: progress.trackersFound,
+            });
+          }
+        },
+        { isCancelled: () => this.cancelRequests.has(scanId) },
+      );
 
       const completedAt = new Date();
       await this.repos.scans.updateStatus(scanId, 'COMPLETED', {
@@ -346,6 +444,31 @@ export class ScansService {
         durationMs: completedAt.getTime() - startedAt.getTime(),
       });
     } catch (error) {
+      if (error instanceof ScanCancelledError) {
+        const current = await this.repos.scans.findById(scanId);
+        if (current && current.status !== 'CANCELLED') {
+          const live = await this.repos.scans.getLiveProgress(scanId);
+          await this.repos.scans.updateStatus(scanId, 'CANCELLED', {
+            completedAt: new Date(),
+            durationMs: Date.now() - startedAt.getTime(),
+            pagesScanned: Math.max(current.pagesScanned, live.pagesScanned),
+            cookiesFound: live.cookiesFound,
+            trackersFound: live.trackersFound,
+            errorMessage: 'Cancelled by user',
+          });
+        }
+        try {
+          await this.cookiesService.ingestScanResults(scanId);
+        } catch (ingestError) {
+          this.logger.warn(
+            `Partial ingest after cancel ${scanId}: ${
+              ingestError instanceof Error ? ingestError.message : String(ingestError)
+            }`,
+          );
+        }
+        return;
+      }
+
       const message = error instanceof Error ? error.message : 'Scan failed';
       await this.repos.scans.updateStatus(scanId, 'FAILED', {
         errorMessage: message,
@@ -362,6 +485,7 @@ export class ScansService {
       }
     } finally {
       this.activeScans.delete(scanId);
+      this.cancelRequests.delete(scanId);
     }
   }
 
