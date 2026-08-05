@@ -277,18 +277,15 @@ export async function runWebsiteScan(
   const pageRecords: ScanRunResult['pageRecords'] = [];
   let pagesScanned = 0;
 
-  const homeLinks = await discoverLinksFromFetchPage(scan.startUrl, siteHostname);
-  enqueueDiscoveredLinks(homeLinks, 1, seen, queue, includePaths, excludePaths);
+  const homepageOnly = scan.maxDepth === 0;
 
-  const sitemapUrls = await discoverSitemapUrls(scan.startUrl, siteHostname);
-  enqueueDiscoveredLinks(
-    sitemapUrls,
-    1,
-    seen,
-    queue,
-    includePaths,
-    excludePaths,
-  );
+  if (!homepageOnly) {
+    const homeLinks = await discoverLinksFromFetchPage(scan.startUrl, siteHostname);
+    enqueueDiscoveredLinks(homeLinks, 1, seen, queue, includePaths, excludePaths);
+
+    const sitemapUrls = await discoverSitemapUrls(scan.startUrl, siteHostname);
+    enqueueDiscoveredLinks(sitemapUrls, 1, seen, queue, includePaths, excludePaths);
+  }
 
   const startNormalized = normalizeUrl(scan.startUrl);
 

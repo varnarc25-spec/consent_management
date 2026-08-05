@@ -311,16 +311,16 @@ export default function DomainDetailPage() {
       method: 'POST',
       body: JSON.stringify({
         startUrl: `https://${domain.hostname}/`,
-        maxPages: domain.scanLimit,
-        maxDepth: 3,
-        timeoutMs: 30000,
+        maxPages: 1,
+        maxDepth: 0,
+        timeoutMs: 45000,
         jsRendering: true,
         deviceType: 'desktop',
       }),
     });
     setStartingScan(false);
     if (result.ok) {
-      setMessage('Domain scan started');
+      setMessage('Homepage scan started');
       loadScans();
     } else {
       setError(result.error?.message ?? 'Failed to start scan');

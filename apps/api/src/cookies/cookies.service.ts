@@ -215,6 +215,8 @@ export class CookiesService {
         },
       });
     }
+
+    await this.repos.cookies.deleteByDomainNotFromScan(scan.domainId, scanId);
   }
 
   private extractScanCookies(

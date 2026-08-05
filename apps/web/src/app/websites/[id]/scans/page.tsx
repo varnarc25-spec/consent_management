@@ -83,15 +83,46 @@ export default function WebsiteScansPage() {
       method: 'POST',
       body: JSON.stringify({
         startUrl: domain ? `https://${domain.hostname}/` : undefined,
-        maxPages: domain?.scanLimit ?? 10,
-        maxDepth: 3,
+        maxPages: 1,
+        maxDepth: 0,
+        timeoutMs: 45000,
         jsRendering: true,
         deviceType: 'desktop',
       }),
     });
     setStarting(false);
     if (result.ok) {
-      setMessage('Scan started');
+      setMessage('Homepage scan started');
+      await loadScans(true);
+    } else {
+      setError(result.error?.message ?? 'Failed to start scan');
+    }
+  }
+
+  async function startFullSiteScan() {
+    setStarting(true);
+    setMessage('');
+    setError('');
+    const sessionOk = await ensureApiSession();
+    if (!sessionOk) {
+      setStarting(false);
+      setError('Session expired. Please sign in again.');
+      return;
+    }
+    const result = await apiFetch<ScanSummary>(`/domains/${domainId}/scans`, {
+      method: 'POST',
+      body: JSON.stringify({
+        startUrl: domain ? `https://${domain.hostname}/` : undefined,
+        maxPages: domain?.scanLimit ?? 10,
+        maxDepth: 3,
+        timeoutMs: 30000,
+        jsRendering: true,
+        deviceType: 'desktop',
+      }),
+    });
+    setStarting(false);
+    if (result.ok) {
+      setMessage('Full site scan started');
       await loadScans(true);
     } else {
       setError(result.error?.message ?? 'Failed to start scan');
@@ -173,16 +204,17 @@ export default function WebsiteScansPage() {
       <div className="card" style={{ marginTop: '1.5rem' }}>
         <h3>Start scan</h3>
         <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
-          Runs a crawl (up to {domain?.scanLimit ?? 10} pages) with JavaScript rendering.
+          <strong>Homepage scan</strong> — one page with consent probing (recommended). Full site
+          crawl uses up to {domain?.scanLimit ?? 10} pages.
         </p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', marginTop: '0.75rem' }}>
           <button
             className="btn"
             type="button"
             disabled={starting || !domain || hasRunningScan}
             onClick={startScan}
           >
-            {starting ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Start scan'}
+            {starting ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Scan homepage'}
           </button>
           {hasRunningScan && (
             <button
@@ -195,6 +227,16 @@ export default function WebsiteScansPage() {
               }}
             >
               {cancellingId ? 'Stopping…' : 'Stop scan'}
+            </button>
+          )}
+          {!hasRunningScan && domain && (
+            <button
+              className="btn btn-secondary"
+              type="button"
+              disabled={starting || !domain}
+              onClick={startFullSiteScan}
+            >
+              Full site scan ({domain.scanLimit} pages)
             </button>
           )}
         </div>

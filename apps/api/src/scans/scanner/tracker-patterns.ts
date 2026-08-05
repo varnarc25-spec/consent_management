@@ -11,6 +11,7 @@ export const TRACKER_PATTERNS: TrackerPattern[] = [
   { name: 'Google Analytics (gtag)', type: 'script', pattern: '/gtag/js', category: 'analytics' },
   { name: 'Microsoft Clarity', type: 'script', pattern: 'clarity.ms', category: 'analytics' },
   { name: 'Hotjar', type: 'script', pattern: 'hotjar.com', category: 'analytics' },
+  { name: 'CMP SDK', type: 'script', pattern: '/public/cmp/sdk.js', category: 'functional' },
   { name: 'Meta Pixel', type: 'script', pattern: 'connect.facebook.net', category: 'marketing' },
   { name: 'Meta Pixel', type: 'pixel', pattern: 'facebook.com/tr', category: 'marketing' },
   { name: 'LinkedIn Insight', type: 'script', pattern: 'snap.licdn.com', category: 'marketing' },

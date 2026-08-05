@@ -240,4 +240,14 @@ export class CookieRepository {
       data,
     });
   }
+
+  /** Remove inventory rows not refreshed by the given scan (stale findings from older crawls). */
+  deleteByDomainNotFromScan(domainId: string, scanId: string) {
+    return this.prisma.domainCookie.deleteMany({
+      where: {
+        domainId,
+        OR: [{ lastScanId: { not: scanId } }, { lastScanId: null }],
+      },
+    });
+  }
 }

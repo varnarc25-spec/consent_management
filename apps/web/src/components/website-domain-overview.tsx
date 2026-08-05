@@ -175,9 +175,9 @@ export function WebsiteDomainOverview({
       method: 'POST',
       body: JSON.stringify({
         startUrl: `https://${hostname}/`,
-        maxPages: scanLimit,
-        maxDepth: 3,
-        timeoutMs: 30000,
+        maxPages: 1,
+        maxDepth: 0,
+        timeoutMs: 45000,
         jsRendering: true,
         deviceType: 'desktop',
       }),
@@ -291,7 +291,7 @@ export function WebsiteDomainOverview({
         <h2 className="domain-section-title">Scan settings</h2>
         <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginBottom: '1rem' }}>
           Choose how often {hostname} should be scanned automatically. Save website settings below
-          after changing frequency.
+          after changing frequency. Manual scans use homepage-only mode for a quick inventory check.
         </p>
         <div className="domain-scan-grid">
           <div className="domain-panel">
@@ -313,14 +313,17 @@ export function WebsiteDomainOverview({
             </div>
           </div>
           <div className="domain-panel domain-scan-now-card">
-            <p>Scan your domain now</p>
+            <p>Scan homepage now</p>
+            <p style={{ color: 'var(--muted)', fontSize: '0.8125rem', margin: '0.25rem 0 0.75rem' }}>
+              One page, full consent probe — usually under a minute.
+            </p>
             <button
               className="btn"
               type="button"
               disabled={startingScan || hasRunningScan}
               onClick={startScan}
             >
-              {startingScan ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Start domain scan'}
+              {startingScan ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Scan homepage'}
             </button>
           </div>
         </div>
