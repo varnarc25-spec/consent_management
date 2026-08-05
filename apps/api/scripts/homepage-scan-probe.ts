@@ -1,6 +1,7 @@
 /**
  * Local probe: same scanner path as production homepage scans.
  * Usage: pnpm --filter @cmp/api scan:homepage-probe -- https://varnarc.com/
+ * (pnpm may pass a literal "--" argument; the script skips it.)
  */
 import { runWebsiteScan } from '../src/scans/scanner/scanner.engine';
 import { dedupeFindings } from '../src/scans/scanner/capture.util';
@@ -10,7 +11,14 @@ import {
 } from '../src/cookies/scan-findings-ingest';
 import { getHostname } from '../src/scans/scanner/crawl.util';
 
-const startUrl = process.argv[2] ?? 'https://varnarc.com/';
+function parseStartUrl(): string {
+  const urlArg = process.argv
+    .slice(2)
+    .find((arg) => arg !== '--' && /^https?:\/\//i.test(arg));
+  return urlArg ?? 'https://varnarc.com/';
+}
+
+const startUrl = parseStartUrl();
 
 async function main() {
   const scan = {
