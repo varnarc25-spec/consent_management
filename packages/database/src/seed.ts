@@ -18,7 +18,7 @@ const PERMISSION_META: Record<string, { name: string; module: string }> = {
   [PERMISSIONS.AUDIT_VIEW]: { name: 'View audit logs', module: 'audit' },
 };
 
-async function main() {
+async function seedPermissions() {
   for (const [slug, meta] of Object.entries(PERMISSION_META)) {
     await prisma.permission.upsert({
       where: { slug },
@@ -26,7 +26,10 @@ async function main() {
       update: { name: meta.name, module: meta.module },
     });
   }
+  console.log(`Seeded ${Object.keys(PERMISSION_META).length} permissions`);
+}
 
+async function seedRoles() {
   for (const [slug, def] of Object.entries(ROLE_DEFINITIONS)) {
     const role = await prisma.role.upsert({
       where: { slug },
@@ -44,56 +47,63 @@ async function main() {
       skipDuplicates: true,
     });
   }
+  console.log(`Seeded ${Object.keys(ROLE_DEFINITIONS).length} roles`);
+}
 
-  console.log('Seeded roles and permissions');
+async function seedMasterCookieDefinitions() {
+  let created = 0;
+  let updated = 0;
 
   for (const cookie of MASTER_COOKIE_DEFINITIONS) {
     const existing = await prisma.cookieDefinition.findFirst({
-      where: { organizationId: null, cookieName: cookie.cookieName, provider: cookie.provider },
+      where: {
+        organizationId: null,
+        cookieName: cookie.cookieName,
+        provider: cookie.provider,
+      },
     });
 
+    const data = {
+      providerDomain: cookie.providerDomain,
+      description: cookie.description,
+      purpose: cookie.purpose,
+      category: cookie.category,
+      duration: cookie.duration,
+      dataCollected: cookie.dataCollected,
+      isThirdParty: cookie.isThirdParty,
+      privacyPolicyUrl: cookie.privacyPolicyUrl,
+      riskLevel: cookie.riskLevel,
+      aliases: cookie.aliases ?? undefined,
+      detectionPatterns: cookie.detectionPatterns as object,
+      isSystem: true,
+    };
+
     if (existing) {
-      await prisma.cookieDefinition.update({
-        where: { id: existing.id },
-        data: {
-          providerDomain: cookie.providerDomain,
-          description: cookie.description,
-          purpose: cookie.purpose,
-          category: cookie.category,
-          duration: cookie.duration,
-          dataCollected: cookie.dataCollected,
-          isThirdParty: cookie.isThirdParty,
-          privacyPolicyUrl: cookie.privacyPolicyUrl,
-          riskLevel: cookie.riskLevel,
-          aliases: cookie.aliases ?? undefined,
-          detectionPatterns: cookie.detectionPatterns as object,
-          isSystem: true,
-        },
-      });
+      await prisma.cookieDefinition.update({ where: { id: existing.id }, data });
+      updated += 1;
     } else {
       await prisma.cookieDefinition.create({
         data: {
           organizationId: null,
           cookieName: cookie.cookieName,
           provider: cookie.provider,
-          providerDomain: cookie.providerDomain,
-          description: cookie.description,
-          purpose: cookie.purpose,
-          category: cookie.category,
-          duration: cookie.duration,
-          dataCollected: cookie.dataCollected,
-          isThirdParty: cookie.isThirdParty,
-          privacyPolicyUrl: cookie.privacyPolicyUrl,
-          riskLevel: cookie.riskLevel,
-          aliases: cookie.aliases ?? undefined,
-          detectionPatterns: cookie.detectionPatterns as object,
-          isSystem: true,
+          ...data,
         },
       });
+      created += 1;
     }
   }
 
-  console.log(`Seeded ${MASTER_COOKIE_DEFINITIONS.length} master cookie definitions`);
+  console.log(
+    `Seeded master cookie definitions (${MASTER_COOKIE_DEFINITIONS.length} total, ${created} created, ${updated} updated)`,
+  );
+}
+
+async function main() {
+  await seedPermissions();
+  await seedRoles();
+  await seedMasterCookieDefinitions();
+  console.log('Database seed complete');
 }
 
 main()

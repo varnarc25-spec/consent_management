@@ -320,6 +320,7 @@ model Domain {
 
   @@index([organizationId])
   @@index([verificationStatus])
+  @@index([scanFrequency, nextScanAt])
   @@map("domains")
 }
 
