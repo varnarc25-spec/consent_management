@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
+import { ScanStatusBadge } from '@/components/scans/scan-status-badge';
 import { apiFetch, ensureApiSession } from '@/lib/api';
 
 interface Domain {
@@ -24,6 +25,22 @@ interface ScanSummary {
   errorMessage: string | null;
   durationMs: number | null;
   createdAt: string;
+}
+
+function formatDuration(ms: number | null) {
+  if (!ms) return '—';
+  if (ms < 1000) return `${ms} ms`;
+  return `${(ms / 1000).toFixed(1)} s`;
+}
+
+function formatStarted(iso: string) {
+  return new Date(iso).toLocaleString(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export default function WebsiteScansPage() {
@@ -166,59 +183,40 @@ export default function WebsiteScansPage() {
     });
     setRetryingId(null);
     if (result.ok) {
-      setMessage('Scan retry started');
+      setMessage('Scan restarted');
       await loadScans(true);
     } else {
       setError(result.error?.message ?? 'Failed to retry scan');
     }
   }
 
-  function formatDuration(ms: number | null) {
-    if (!ms) return '—';
-    if (ms < 1000) return `${ms} ms`;
-    return `${(ms / 1000).toFixed(1)} s`;
-  }
-
   const hasRunningScan = scans.some((s) => s.status === 'RUNNING');
+  const lastCompleted = scans.find((s) => s.status === 'COMPLETED');
+  const totalScans = scans.length;
+  const failedCount = scans.filter((s) => s.status === 'FAILED' || s.status === 'CANCELLED').length;
 
   return (
     <ProtectedLayout>
-      <p>
-        <Link href={`/websites/${domainId}`}>← Back to website</Link> ·{' '}
-        <Link href={`/websites/${domainId}/consent`}>Consent configuration</Link>
-      </p>
-      <h1>Website scans</h1>
-      <p style={{ color: 'var(--muted)' }}>
-        Detect cookies, storage, and trackers on <strong>{domain?.hostname ?? '…'}</strong>.
-      </p>
+      <nav className="breadcrumb" aria-label="Breadcrumb">
+        <Link href="/dashboard">Dashboard</Link>
+        <span className="breadcrumb-sep">/</span>
+        <Link href={`/websites/${domainId}`}>{domain?.hostname ?? 'Website'}</Link>
+        <span className="breadcrumb-sep">/</span>
+        <span>Scans</span>
+      </nav>
 
-      {hasRunningScan && (
-        <p className="success" role="status">
-          Scan in progress — this page refreshes every few seconds.
-        </p>
-      )}
-
-      {message && <p className="success">{message}</p>}
-      {error && <p className="error">{error}</p>}
-
-      <div className="card" style={{ marginTop: '1.5rem' }}>
-        <h3>Start scan</h3>
-        <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
-          <strong>Homepage scan</strong> — one page with consent probing (recommended). Full site
-          crawl uses up to {domain?.scanLimit ?? 10} pages.
-        </p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', marginTop: '0.75rem' }}>
-          <button
-            className="btn"
-            type="button"
-            disabled={starting || !domain || hasRunningScan}
-            onClick={startScan}
-          >
-            {starting ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Scan homepage'}
-          </button>
-          {hasRunningScan && (
+      <div className="page-header">
+        <div>
+          <h1>Website scans</h1>
+          <p className="page-subtitle">
+            Detect cookies, storage, and trackers on{' '}
+            <strong>{domain?.hostname ?? '…'}</strong>
+          </p>
+        </div>
+        {hasRunningScan && (
+          <div className="page-toolbar">
             <button
-              className="btn btn-secondary"
+              className="btn-ghost btn-ghost-danger"
               type="button"
               disabled={cancellingId !== null}
               onClick={() => {
@@ -228,111 +226,197 @@ export default function WebsiteScansPage() {
             >
               {cancellingId ? 'Stopping…' : 'Stop scan'}
             </button>
-          )}
-          {!hasRunningScan && domain && (
-            <button
-              className="btn btn-secondary"
-              type="button"
-              disabled={starting || !domain}
-              onClick={startFullSiteScan}
-            >
-              Full site scan ({domain.scanLimit} pages)
-            </button>
-          )}
+          </div>
+        )}
+      </div>
+
+      {hasRunningScan && (
+        <div className="alert alert-info" role="status">
+          <span className="alert-icon">↻</span>
+          <span>Scan in progress — this page refreshes every few seconds.</span>
+        </div>
+      )}
+
+      {message && (
+        <div className="alert alert-success" role="status">
+          <span className="alert-icon">✓</span>
+          <span>{message}</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="alert alert-error" role="alert">
+          <span className="alert-icon">!</span>
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div className="stat-grid">
+        <div className="stat-card">
+          <span className="stat-label">Total scans</span>
+          <span className="stat-value">{totalScans}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Last cookies</span>
+          <span className="stat-value">{lastCompleted?.cookiesFound ?? '—'}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Last trackers</span>
+          <span className="stat-value">{lastCompleted?.trackersFound ?? '—'}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Failed / stopped</span>
+          <span className="stat-value">{failedCount}</span>
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: '1.5rem' }}>
-        <h3>Scan history</h3>
-        {scans.length === 0 ? (
-          <p style={{ color: 'var(--muted)' }}>No scans yet.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Started</th>
-                <th>Status</th>
-                <th>Pages</th>
-                <th>Cookies</th>
-                <th>Trackers</th>
-                <th>Duration</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {scans.map((scan) => (
-                <tr key={scan.id}>
-                  <td>{new Date(scan.createdAt).toLocaleString()}</td>
-                  <td>
-                    <code>{scan.status}</code>
-                    {scan.status === 'RUNNING' && (
-                      <div style={{ marginTop: '0.375rem' }}>
-                        <div
-                          style={{
-                            height: 6,
-                            borderRadius: 3,
-                            background: 'var(--surface-muted)',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <div
-                            style={{
-                              height: '100%',
-                              width: `${scan.progressPercent ?? 0}%`,
-                              background: 'var(--primary)',
-                              transition: 'width 0.3s ease',
-                            }}
-                          />
-                        </div>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-                          {scan.pagesScanned}/{scan.maxPages} ({scan.progressPercent ?? 0}%)
-                        </span>
-                      </div>
-                    )}
-                    {scan.errorMessage && (
-                      <p
-                        style={{
-                          fontSize: '0.75rem',
-                          color: scan.status === 'FAILED' ? 'var(--danger)' : 'var(--muted)',
-                          margin: '0.25rem 0 0',
-                          maxWidth: '28rem',
-                        }}
-                      >
-                        {scan.errorMessage}
-                      </p>
-                    )}
-                  </td>
-                  <td>{scan.pagesScanned}/{scan.maxPages}</td>
-                  <td>{scan.cookiesFound}</td>
-                  <td>{scan.trackersFound}</td>
-                  <td>{formatDuration(scan.durationMs)}</td>
-                  <td>
-                    {scan.status === 'RUNNING' && (
-                      <button
-                        className="btn-link"
-                        type="button"
-                        disabled={cancellingId === scan.id}
-                        onClick={() => cancelScan(scan.id)}
-                      >
-                        {cancellingId === scan.id ? 'Stopping…' : 'Stop'}
-                      </button>
-                    )}
-                    {(scan.status === 'FAILED' || scan.status === 'CANCELLED') && (
-                      <button
-                        className="btn-link"
-                        type="button"
-                        disabled={retryingId === scan.id || hasRunningScan}
-                        onClick={() => retryScan(scan.id)}
-                      >
-                        {retryingId === scan.id ? 'Restarting…' : 'Run again'}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      <div className="panel-grid">
+        <div className="panel-main">
+          <div className="card">
+            <div className="card-header">
+              <h2>Scan history</h2>
+              <span className="card-meta">{scans.length} records</span>
+            </div>
+
+            {scans.length === 0 ? (
+              <p className="empty-state">No scans yet. Run a homepage scan to build your cookie inventory.</p>
+            ) : (
+              <div className="data-table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Started</th>
+                      <th>Status</th>
+                      <th>Pages</th>
+                      <th>Cookies</th>
+                      <th>Trackers</th>
+                      <th>Duration</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scans.map((scan) => {
+                      const pagePct =
+                        scan.maxPages > 0
+                          ? Math.round((scan.pagesScanned / scan.maxPages) * 100)
+                          : 0;
+                      return (
+                        <tr key={scan.id}>
+                          <td>
+                            <time dateTime={scan.createdAt}>{formatStarted(scan.createdAt)}</time>
+                          </td>
+                          <td>
+                            <ScanStatusBadge status={scan.status} />
+                            {scan.status === 'RUNNING' && (
+                              <>
+                                <div className="progress-track">
+                                  <div
+                                    className="progress-fill"
+                                    style={{
+                                      width: `${scan.progressPercent ?? pagePct}%`,
+                                    }}
+                                  />
+                                </div>
+                                <p className="progress-meta">
+                                  {scan.pagesScanned}/{scan.maxPages} pages (
+                                  {scan.progressPercent ?? pagePct}%)
+                                </p>
+                              </>
+                            )}
+                            {scan.errorMessage && (
+                              <p className="table-error">{scan.errorMessage}</p>
+                            )}
+                          </td>
+                          <td className="data-table-num">
+                            {scan.pagesScanned}/{scan.maxPages}
+                          </td>
+                          <td className="data-table-num">{scan.cookiesFound}</td>
+                          <td className="data-table-num">{scan.trackersFound}</td>
+                          <td className="data-table-num">{formatDuration(scan.durationMs)}</td>
+                          <td>
+                            <div className="table-actions">
+                              {scan.status === 'RUNNING' && (
+                                <button
+                                  className="btn-ghost btn-ghost-danger"
+                                  type="button"
+                                  disabled={cancellingId === scan.id}
+                                  onClick={() => cancelScan(scan.id)}
+                                >
+                                  {cancellingId === scan.id ? 'Stopping…' : 'Stop'}
+                                </button>
+                              )}
+                              {(scan.status === 'FAILED' || scan.status === 'CANCELLED') && (
+                                <button
+                                  className="btn-ghost btn-ghost-primary"
+                                  type="button"
+                                  disabled={retryingId === scan.id || hasRunningScan}
+                                  onClick={() => retryScan(scan.id)}
+                                >
+                                  {retryingId === scan.id ? 'Restarting…' : 'Run again'}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <aside className="panel-side">
+          <div className="card">
+            <div className="card-header">
+              <h2>Start scan</h2>
+            </div>
+            <div className="scan-actions-grid">
+              <div className="scan-action-card scan-action-card-featured">
+                <h4>Homepage scan</h4>
+                <p>
+                  One page with full consent probing. Recommended for cookie inventory and quick
+                  checks (~1 min).
+                </p>
+                <button
+                  className="btn"
+                  type="button"
+                  disabled={starting || !domain || hasRunningScan}
+                  onClick={startScan}
+                >
+                  {starting ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Scan homepage'}
+                </button>
+              </div>
+              <div className="scan-action-card">
+                <h4>Full site crawl</h4>
+                <p>
+                  Crawls up to {domain?.scanLimit ?? 10} pages with link discovery. Use for deep
+                  audits; may take several minutes.
+                </p>
+                <button
+                  className="btn btn-secondary"
+                  type="button"
+                  disabled={starting || !domain || hasRunningScan}
+                  onClick={startFullSiteScan}
+                >
+                  Full site ({domain?.scanLimit ?? 10} pages)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="card" style={{ marginTop: '1rem' }}>
+            <div className="card-header">
+              <h2>Quick links</h2>
+            </div>
+            <p style={{ margin: 0, fontSize: '0.875rem' }}>
+              <Link href={`/websites/${domainId}`}>Website overview</Link>
+              <br />
+              <Link href={`/websites/${domainId}/consent`}>Consent configuration</Link>
+            </p>
+          </div>
+        </aside>
       </div>
     </ProtectedLayout>
   );
