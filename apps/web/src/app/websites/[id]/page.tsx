@@ -5,8 +5,11 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
 import { LoadingScreen } from '@/components/loading-screen';
-import { WebsiteSetupSteps } from '@/components/website-setup-steps';
 import { WebsiteLayout } from '@/components/website-layout';
+import { WebsiteScanStatus } from '@/components/website-scan-context';
+import { WebsiteDomainOverview } from '@/components/website-domain-overview';
+import { WebsiteScanSettings } from '@/components/website-scan-settings';
+import { WebsiteSetupSteps } from '@/components/website-setup-steps';
 import { apiFetch } from '@/lib/api';
 
 interface Domain {
@@ -183,34 +186,35 @@ export default function DomainDetailPage() {
         <WebsiteLayout
           domainId={id}
           hostname={domain.hostname}
-          overview={{
-            domainId: domain.id,
-            scanLimit: domain.scanLimit,
-            scanFrequency: settings.scanFrequency,
-            nextScanAt: domain.nextScanAt,
-            onFrequencyChange: (f) => setSettings((s) => ({ ...s, scanFrequency: f })),
-          }}
+          domainKey={domain.domainKey}
+          verificationStatus={domain.verificationStatus}
         >
-      <h1>{domain.hostname}</h1>
-      <p style={{ color: 'var(--muted)' }}>
-        Key: <code>{domain.domainKey}</code> · Verification: {domain.verificationStatus}
-        {domain.isProduction && domain.environment === 'production' && domain.verificationStatus !== 'VERIFIED' && (
-          <span style={{ color: 'var(--danger)', marginLeft: '0.5rem' }}>
-            Production config blocked until verified
-          </span>
-        )}
-      </p>
+      <div className="website-page-header website-page-header-end">
+        <WebsiteScanStatus />
+      </div>
 
       {message && <p className="success">{message}</p>}
       {error && <p className="error">{error}</p>}
 
-      <div className="card website-setup-card" style={{ marginTop: '0' }}>
-        <WebsiteSetupSteps
-          domainId={domain.id}
-          hostname={domain.hostname}
-          verificationStatus={domain.verificationStatus}
-          sdkLastSeenAt={domain.sdkLastSeenAt}
-        />
+      <div className="website-setup-overview-row">
+        <div className="card website-setup-card">
+          <WebsiteSetupSteps
+            domainId={domain.id}
+            hostname={domain.hostname}
+            verificationStatus={domain.verificationStatus}
+            sdkLastSeenAt={domain.sdkLastSeenAt}
+          />
+        </div>
+
+        <div className="card website-overview-main-card">
+          <WebsiteDomainOverview
+            domainId={domain.id}
+            hostname={domain.hostname}
+            scanLimit={domain.scanLimit}
+            scanFrequency={settings.scanFrequency}
+            nextScanAt={domain.nextScanAt}
+          />
+        </div>
       </div>
 
       <div className="card website-domain-merged" style={{ marginTop: '1.5rem' }}>
@@ -263,6 +267,13 @@ export default function DomainDetailPage() {
                 </div>
                 <button className="btn btn-secondary" type="submit">Save settings</button>
               </form>
+
+              <WebsiteScanSettings
+                domainId={domain.id}
+                hostname={domain.hostname}
+                scanFrequency={settings.scanFrequency}
+                onFrequencyChange={(f) => setSettings((s) => ({ ...s, scanFrequency: f }))}
+              />
             </section>
 
             <section className="website-domain-section" id="setup-verify">
@@ -297,10 +308,33 @@ export default function DomainDetailPage() {
               <h3>Installation script</h3>
               {install && (
                 <>
-                  <pre className="website-install-snippet">{install.snippet}</pre>
-                  <button className="btn" style={{ marginTop: '1rem' }} type="button" onClick={copySnippet}>
-                    Copy script
-                  </button>
+                  <div className="website-install-snippet-row">
+                    <code className="website-install-snippet">{install.snippet}</code>
+                    <button
+                      type="button"
+                      className="website-install-copy"
+                      onClick={copySnippet}
+                      aria-label="Copy script"
+                      title="Copy script"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <rect
+                          x="9"
+                          y="9"
+                          width="13"
+                          height="13"
+                          rx="2"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        />
+                        <path
+                          d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                   <div className="field" style={{ marginTop: '1rem' }}>
                     <label htmlFor="guide">Platform guide</label>
                     <select id="guide" value={guide} onChange={(e) => setGuide(e.target.value)}>

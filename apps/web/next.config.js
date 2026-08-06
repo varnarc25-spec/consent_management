@@ -16,6 +16,7 @@ const nextConfig = {
     NEXT_PUBLIC_AUTH0_CLIENT_ID:
       process.env.CM_AUTH0_CLIENT_ID || process.env.AUTH0_CLIENT_ID,
     AUTH0_AUDIENCE: process.env.AUTH0_AUDIENCE,
+    APP_BASE_URL: process.env.APP_BASE_URL,
   },
 };
 

@@ -119,13 +119,17 @@ export function appBaseUrlMatchesHost(
 ): boolean {
   const normalizedHost = host.trim().toLowerCase();
   if (!normalizedHost) return false;
-  if (normalizedHost.startsWith('0.0.0.0') || normalizedHost.startsWith('127.0.0.1')) {
+  if (normalizedHost.startsWith('0.0.0.0')) {
     return false;
   }
 
   const fromEnv = getAppBaseUrl(env);
   if (isLocalAppBase(fromEnv)) {
     return true;
+  }
+
+  if (normalizedHost.startsWith('127.0.0.1')) {
+    return false;
   }
 
   try {

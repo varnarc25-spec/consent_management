@@ -1,11 +1,13 @@
 import { cookies } from 'next/headers';
 import { getAuth0 } from '@/lib/auth0';
+import { getAuth0SessionFromRequest } from '@/lib/auth0-session.server';
 import { ACCESS_COOKIE, REFRESH_COOKIE } from '@/lib/auth-cookies';
 import {
   isAccessTokenExpired,
   refreshCmpTokensFromCookie,
   setCmpTokenCookies,
 } from '@/lib/cmp-auth-server';
+import { getApiBaseUrl } from '@/lib/runtime-public-env';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function GET(request: NextRequest) {
@@ -25,25 +27,33 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const audience = process.env.AUTH0_AUDIENCE;
+
   try {
-    const audience = process.env.AUTH0_AUDIENCE;
-    const session = await getAuth0().getSession(request);
+    const session = await getAuth0SessionFromRequest(request);
     if (session?.user) {
-      const idToken = (session as { tokenSet?: { idToken?: string } }).tokenSet?.idToken;
+      const idToken =
+        (session as { tokenSet?: { idToken?: string; id_token?: string } }).tokenSet?.idToken ??
+        (session as { tokenSet?: { id_token?: string } }).tokenSet?.id_token;
       if (idToken) {
-        const syncRes = await fetch(new URL('/api/auth/sync', request.url), {
+        const res = await fetch(`${getApiBaseUrl()}/auth/auth0/callback`, {
           method: 'POST',
-          headers: request.headers,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+          cache: 'no-store',
         });
-        if (syncRes.ok) {
-          const cookieStore = await cookies();
-          const synced = cookieStore.get(ACCESS_COOKIE)?.value;
-          if (synced && !isAccessTokenExpired(synced)) {
-            return NextResponse.json({ accessToken: synced });
-          }
+        const result = (await res.json()) as {
+          ok: boolean;
+          data?: { accessToken: string; refreshToken: string };
+        };
+        if (result.ok && result.data?.accessToken && result.data?.refreshToken) {
+          const response = NextResponse.json({ accessToken: result.data.accessToken });
+          setCmpTokenCookies(response, result.data);
+          return response;
         }
       }
     }
+
     const result = await getAuth0().getAccessToken(audience ? { audience } : undefined);
     if (result?.token) {
       return NextResponse.json({ accessToken: result.token });

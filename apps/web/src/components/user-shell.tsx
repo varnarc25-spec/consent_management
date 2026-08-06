@@ -44,6 +44,11 @@ export function UserShell({
               {item.label}
             </Link>
           ))}
+          {pathname.startsWith('/websites/') && (
+            <Link href="/dashboard" className="nav-back-link">
+              ← All websites
+            </Link>
+          )}
         </nav>
         <div className="nav-actions">
           <ProfileMenu user={user} />

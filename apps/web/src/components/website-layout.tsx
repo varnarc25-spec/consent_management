@@ -2,69 +2,58 @@
 
 import { useEffect, useState } from 'react';
 import { WebsiteSidebar } from '@/components/website-sidebar';
-import type { WebsiteDomainOverviewProps } from '@/components/website-domain-overview';
+import { WebsiteScanProvider } from '@/components/website-scan-context';
 import { apiFetch } from '@/lib/api';
-
-export type WebsiteOverviewProps = Omit<WebsiteDomainOverviewProps, 'hostname'> & {
-  hostname?: string;
-};
 
 export function WebsiteLayout({
   domainId,
   hostname: hostnameProp,
-  overview: overviewProp,
+  domainKey: domainKeyProp,
+  verificationStatus: verificationStatusProp,
   children,
 }: {
   domainId: string;
   hostname?: string;
-  overview?: WebsiteOverviewProps | null;
+  domainKey?: string;
+  verificationStatus?: string;
   children: React.ReactNode;
 }) {
-  const [hostname, setHostname] = useState(hostnameProp ?? overviewProp?.hostname ?? '');
+  const [hostname, setHostname] = useState(hostnameProp ?? '');
   const [domainMeta, setDomainMeta] = useState<{
-    scanLimit: number;
-    scanFrequency: string;
-    nextScanAt: string | null;
+    domainKey: string;
+    verificationStatus: string;
   } | null>(null);
 
   useEffect(() => {
     if (hostnameProp) setHostname(hostnameProp);
-    else if (overviewProp?.hostname) setHostname(overviewProp.hostname);
-  }, [hostnameProp, overviewProp?.hostname]);
+  }, [hostnameProp]);
 
   useEffect(() => {
     apiFetch<{
       hostname: string;
-      scanLimit: number;
-      scanFrequency: string;
-      nextScanAt: string | null;
+      domainKey: string;
+      verificationStatus: string;
     }>(`/domains/${domainId}`, { silent: true }).then((r) => {
       if (!r.data) return;
-      if (!hostnameProp && !overviewProp?.hostname) setHostname(r.data.hostname);
+      if (!hostnameProp) setHostname(r.data.hostname);
       setDomainMeta({
-        scanLimit: r.data.scanLimit,
-        scanFrequency: r.data.scanFrequency ?? 'MANUAL',
-        nextScanAt: r.data.nextScanAt,
+        domainKey: r.data.domainKey,
+        verificationStatus: r.data.verificationStatus,
       });
     });
-  }, [domainId, hostnameProp, overviewProp?.hostname]);
-
-  const overview: WebsiteDomainOverviewProps | null =
-    overviewProp === null
-      ? null
-      : {
-          domainId,
-          hostname: hostname || overviewProp?.hostname || '…',
-          scanLimit: overviewProp?.scanLimit ?? domainMeta?.scanLimit ?? 10,
-          scanFrequency: overviewProp?.scanFrequency ?? domainMeta?.scanFrequency ?? 'MANUAL',
-          nextScanAt: overviewProp?.nextScanAt ?? domainMeta?.nextScanAt ?? null,
-          onFrequencyChange: overviewProp?.onFrequencyChange,
-        };
+  }, [domainId, hostnameProp]);
 
   return (
-    <div className="website-layout">
-      <WebsiteSidebar domainId={domainId} hostname={hostname} overview={overview} />
-      <div className="website-main">{children}</div>
-    </div>
+    <WebsiteScanProvider domainId={domainId}>
+      <div className="website-layout">
+        <WebsiteSidebar
+          domainId={domainId}
+          hostname={hostname}
+          domainKey={domainKeyProp ?? domainMeta?.domainKey}
+          verificationStatus={verificationStatusProp ?? domainMeta?.verificationStatus}
+        />
+        <div className="website-main">{children}</div>
+      </div>
+    </WebsiteScanProvider>
   );
 }

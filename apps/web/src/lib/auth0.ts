@@ -9,6 +9,7 @@ export function getAuth0() {
       ...getAuth0ClientOptions(),
       clientId: getAuth0ClientId(),
       clientSecret: getAuth0ClientSecret(),
+      signInReturnToPath: '/dashboard',
       authorizationParameters: {
         scope: 'openid profile email offline_access',
         ...(process.env.AUTH0_AUDIENCE ? { audience: process.env.AUTH0_AUDIENCE } : {}),

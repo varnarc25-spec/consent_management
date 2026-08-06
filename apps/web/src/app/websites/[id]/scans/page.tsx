@@ -1,17 +1,29 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
+import { LoadingScreen } from '@/components/loading-screen';
 import { ScanStatusBadge } from '@/components/scans/scan-status-badge';
+import { WebsiteDomainOverview } from '@/components/website-domain-overview';
+import { WebsiteLayout } from '@/components/website-layout';
+import {
+  WebsiteScanStatus,
+  useWebsiteScan,
+} from '@/components/website-scan-context';
+import { WebsiteSetupSteps } from '@/components/website-setup-steps';
 import { useRunningScanPoll } from '@/hooks/use-running-scan-poll';
 import { apiFetch, ensureApiSession } from '@/lib/api';
 
 interface Domain {
   id: string;
   hostname: string;
+  domainKey: string;
+  verificationStatus: string;
+  sdkLastSeenAt: string | null;
   scanLimit: number;
+  scanFrequency: string;
+  nextScanAt: string | null;
 }
 
 interface ScanSummary {
@@ -26,11 +38,6 @@ interface ScanSummary {
   errorMessage: string | null;
   durationMs: number | null;
   createdAt: string;
-}
-
-interface CookieCategorySummary {
-  total: number;
-  categories: Array<{ slug: string; name: string; count: number }>;
 }
 
 function formatDuration(ms: number | null) {
@@ -49,25 +56,15 @@ function formatStarted(iso: string) {
   });
 }
 
-export default function WebsiteScansPage() {
-  const params = useParams();
-  const domainId = params.id as string;
-  const [domain, setDomain] = useState<Domain | null>(null);
+function WebsiteScansContent({ domain }: { domain: Domain }) {
+  const domainId = domain.id;
+  const websiteScan = useWebsiteScan();
   const [scans, setScans] = useState<ScanSummary[]>([]);
-  const [cookieSummary, setCookieSummary] = useState<CookieCategorySummary | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
-
-  function loadCookieSummary(silent = false) {
-    return apiFetch<CookieCategorySummary>(`/domains/${domainId}/cookies/summary`, { silent }).then(
-      (r) => {
-        if (r.data) setCookieSummary(r.data);
-      },
-    );
-  }
 
   function loadScans(silent = false) {
     return apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`, { silent }).then((r) => {
@@ -79,37 +76,34 @@ export default function WebsiteScansPage() {
     });
   }
 
-  const hasRunningScan = scans.some((s) => s.status === 'RUNNING');
+  const hasRunningScan =
+    scans.some((s) => s.status === 'RUNNING') || Boolean(websiteScan?.hasRunningScan);
 
   const pollScans = useCallback(async () => {
     await loadScans(true);
   }, [domainId]);
 
   const refreshAfterScan = useCallback(async () => {
-    await Promise.all([loadScans(true), loadCookieSummary(true)]);
+    await loadScans(true);
   }, [domainId]);
 
   useRunningScanPoll(hasRunningScan, pollScans, refreshAfterScan);
 
-  async function loadInitial() {
-    const domainResult = await apiFetch<Domain>(`/domains/${domainId}`);
-    if (domainResult.data) {
-      setDomain(domainResult.data);
-    } else if (domainResult.error?.code === 'UNAUTHORIZED') {
-      setError('Session expired. Please sign in again.');
-    }
-    await loadScans();
-    await loadCookieSummary();
-  }
+  useEffect(() => {
+    loadScans();
+  }, [domainId]);
 
   useEffect(() => {
-    loadInitial();
-  }, [domainId]);
+    if (websiteScan?.flashMessage) {
+      setMessage(websiteScan.flashMessage);
+    }
+  }, [websiteScan?.flashMessage]);
 
   async function startScan() {
     setStarting(true);
     setMessage('');
     setError('');
+    websiteScan?.clearFlash();
     const sessionOk = await ensureApiSession();
     if (!sessionOk) {
       setStarting(false);
@@ -119,7 +113,7 @@ export default function WebsiteScansPage() {
     const result = await apiFetch<ScanSummary>(`/domains/${domainId}/scans`, {
       method: 'POST',
       body: JSON.stringify({
-        startUrl: domain ? `https://${domain.hostname}/` : undefined,
+        startUrl: `https://${domain.hostname}/`,
         maxPages: 1,
         maxDepth: 0,
         timeoutMs: 45000,
@@ -130,6 +124,7 @@ export default function WebsiteScansPage() {
     setStarting(false);
     if (result.ok) {
       setMessage('Homepage scan started');
+      websiteScan?.notifyScanStarted();
       await loadScans(true);
     } else {
       setError(result.error?.message ?? 'Failed to start scan');
@@ -140,6 +135,7 @@ export default function WebsiteScansPage() {
     setStarting(true);
     setMessage('');
     setError('');
+    websiteScan?.clearFlash();
     const sessionOk = await ensureApiSession();
     if (!sessionOk) {
       setStarting(false);
@@ -149,8 +145,8 @@ export default function WebsiteScansPage() {
     const result = await apiFetch<ScanSummary>(`/domains/${domainId}/scans`, {
       method: 'POST',
       body: JSON.stringify({
-        startUrl: domain ? `https://${domain.hostname}/` : undefined,
-        maxPages: domain?.scanLimit ?? 10,
+        startUrl: `https://${domain.hostname}/`,
+        maxPages: domain.scanLimit,
         maxDepth: 3,
         timeoutMs: 30000,
         jsRendering: true,
@@ -160,6 +156,7 @@ export default function WebsiteScansPage() {
     setStarting(false);
     if (result.ok) {
       setMessage('Full site scan started');
+      websiteScan?.notifyScanStarted();
       await loadScans(true);
     } else {
       setError(result.error?.message ?? 'Failed to start scan');
@@ -204,262 +201,237 @@ export default function WebsiteScansPage() {
     setRetryingId(null);
     if (result.ok) {
       setMessage('Scan restarted');
+      websiteScan?.notifyScanStarted();
       await loadScans(true);
     } else {
       setError(result.error?.message ?? 'Failed to retry scan');
     }
   }
 
-  const lastCompleted = scans.find((s) => s.status === 'COMPLETED');
-  const totalScans = scans.length;
-  const failedCount = scans.filter((s) => s.status === 'FAILED' || s.status === 'CANCELLED').length;
+  const runningScan = scans.find((s) => s.status === 'RUNNING');
 
   return (
-    <ProtectedLayout>
-      <nav className="breadcrumb" aria-label="Breadcrumb">
-        <Link href="/dashboard">Dashboard</Link>
-        <span className="breadcrumb-sep">/</span>
-        <Link href={`/websites/${domainId}`}>{domain?.hostname ?? 'Website'}</Link>
-        <span className="breadcrumb-sep">/</span>
-        <span>Scans</span>
-      </nav>
-
-      <div className="page-header">
-        <div>
-          <h1>Website scans</h1>
-          <p className="page-subtitle">
-            Detect cookies, storage, and trackers on{' '}
-            <strong>{domain?.hostname ?? '…'}</strong>
-          </p>
-        </div>
+    <>
+      <div className="website-page-header website-page-header-end">
+        <WebsiteScanStatus />
         {hasRunningScan && (
-          <div className="page-toolbar">
-            <button
-              className="btn-ghost btn-ghost-danger"
-              type="button"
-              disabled={cancellingId !== null}
-              onClick={() => {
-                const running = scans.find((s) => s.status === 'RUNNING');
-                if (running) cancelScan(running.id);
-              }}
-            >
-              {cancellingId ? 'Stopping…' : 'Stop scan'}
-            </button>
-          </div>
+          <button
+            className="btn btn-secondary"
+            type="button"
+            disabled={cancellingId !== null || !runningScan}
+            onClick={() => {
+              if (runningScan) cancelScan(runningScan.id);
+            }}
+          >
+            {cancellingId ? 'Stopping…' : 'Stop scan'}
+          </button>
         )}
       </div>
 
-      {hasRunningScan && (
-        <div className="alert alert-info" role="status">
-          <span className="alert-icon">↻</span>
-          <span>Scan in progress — this page refreshes every few seconds.</span>
-        </div>
-      )}
+      {message && <p className="success">{message}</p>}
+      {error && <p className="error">{error}</p>}
 
-      {message && (
-        <div className="alert alert-success" role="status">
-          <span className="alert-icon">✓</span>
-          <span>{message}</span>
+      <div className="website-setup-overview-row">
+        <div className="card website-setup-card">
+          <WebsiteSetupSteps
+            domainId={domain.id}
+            hostname={domain.hostname}
+            verificationStatus={domain.verificationStatus}
+            sdkLastSeenAt={domain.sdkLastSeenAt}
+          />
         </div>
-      )}
 
-      {error && (
-        <div className="alert alert-error" role="alert">
-          <span className="alert-icon">!</span>
-          <span>{error}</span>
-        </div>
-      )}
-
-      <div className="stat-grid">
-        <div className="stat-card">
-          <span className="stat-label">Inventory total</span>
-          <span className="stat-value">{cookieSummary?.total ?? '—'}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Total scans</span>
-          <span className="stat-value">{totalScans}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Last scan cookies</span>
-          <span className="stat-value">{lastCompleted?.cookiesFound ?? '—'}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Last scan trackers</span>
-          <span className="stat-value">{lastCompleted?.trackersFound ?? '—'}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Failed / stopped</span>
-          <span className="stat-value">{failedCount}</span>
+        <div className="card website-overview-main-card">
+          <WebsiteDomainOverview
+            domainId={domain.id}
+            hostname={domain.hostname}
+            scanLimit={domain.scanLimit}
+            scanFrequency={domain.scanFrequency}
+            nextScanAt={domain.nextScanAt}
+          />
         </div>
       </div>
 
-      {cookieSummary && cookieSummary.total > 0 && (
-        <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <div className="card-header">
-            <h2>Cookie inventory</h2>
-            <Link className="card-meta" href={`/websites/${domainId}`}>Overview →</Link>
-          </div>
-          <ul className="domain-category-list" style={{ margin: 0 }}>
-            {cookieSummary.categories
-              .filter((c) => c.count > 0)
-              .map((c) => (
-                <li key={c.slug}>
-                  <span>{c.name}</span>
-                  <span>{c.count}</span>
-                </li>
-              ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="panel-grid">
-        <div className="panel-main">
-          <div className="card">
-            <div className="card-header">
-              <h2>Scan history</h2>
-              <span className="card-meta">{scans.length} records</span>
+      <div className="card website-domain-merged" style={{ marginTop: '1.5rem' }}>
+        <section className="website-domain-section">
+          <h3>Start scan</h3>
+          <div className="scan-actions-grid">
+            <div className="scan-action-card scan-action-card-featured">
+              <h4>Homepage scan</h4>
+              <p>
+                One page with full consent probing. Recommended for cookie inventory and quick
+                checks (~1 min).
+              </p>
+              <button
+                className="btn"
+                type="button"
+                disabled={starting || hasRunningScan}
+                onClick={startScan}
+              >
+                {starting ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Scan homepage'}
+              </button>
             </div>
-
-            {scans.length === 0 ? (
-              <p className="empty-state">No scans yet. Run a homepage scan to build your cookie inventory.</p>
-            ) : (
-              <div className="data-table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Started</th>
-                      <th>Status</th>
-                      <th>Pages</th>
-                      <th>Cookies</th>
-                      <th>Trackers</th>
-                      <th>Duration</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {scans.map((scan) => {
-                      const pagePct =
-                        scan.maxPages > 0
-                          ? Math.round((scan.pagesScanned / scan.maxPages) * 100)
-                          : 0;
-                      return (
-                        <tr key={scan.id}>
-                          <td>
-                            <time dateTime={scan.createdAt}>{formatStarted(scan.createdAt)}</time>
-                          </td>
-                          <td>
-                            <ScanStatusBadge status={scan.status} />
-                            {scan.status === 'RUNNING' && (
-                              <>
-                                <div className="progress-track">
-                                  <div
-                                    className="progress-fill"
-                                    style={{
-                                      width: `${scan.progressPercent ?? pagePct}%`,
-                                    }}
-                                  />
-                                </div>
-                                <p className="progress-meta">
-                                  {scan.pagesScanned}/{scan.maxPages} pages (
-                                  {scan.progressPercent ?? pagePct}%)
-                                </p>
-                              </>
-                            )}
-                            {scan.errorMessage && (
-                              <p className="table-error">{scan.errorMessage}</p>
-                            )}
-                          </td>
-                          <td className="data-table-num">
-                            {scan.pagesScanned}/{scan.maxPages}
-                          </td>
-                          <td className="data-table-num">{scan.cookiesFound}</td>
-                          <td className="data-table-num">{scan.trackersFound}</td>
-                          <td className="data-table-num">{formatDuration(scan.durationMs)}</td>
-                          <td>
-                            <div className="table-actions">
-                              {scan.status === 'RUNNING' && (
-                                <button
-                                  className="btn-ghost btn-ghost-danger"
-                                  type="button"
-                                  disabled={cancellingId === scan.id}
-                                  onClick={() => cancelScan(scan.id)}
-                                >
-                                  {cancellingId === scan.id ? 'Stopping…' : 'Stop'}
-                                </button>
-                              )}
-                              {(scan.status === 'FAILED' || scan.status === 'CANCELLED') && (
-                                <button
-                                  className="btn-ghost btn-ghost-primary"
-                                  type="button"
-                                  disabled={retryingId === scan.id || hasRunningScan}
-                                  onClick={() => retryScan(scan.id)}
-                                >
-                                  {retryingId === scan.id ? 'Restarting…' : 'Run again'}
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <aside className="panel-side">
-          <div className="card">
-            <div className="card-header">
-              <h2>Start scan</h2>
-            </div>
-            <div className="scan-actions-grid">
-              <div className="scan-action-card scan-action-card-featured">
-                <h4>Homepage scan</h4>
-                <p>
-                  One page with full consent probing. Recommended for cookie inventory and quick
-                  checks (~1 min).
-                </p>
-                <button
-                  className="btn"
-                  type="button"
-                  disabled={starting || !domain || hasRunningScan}
-                  onClick={startScan}
-                >
-                  {starting ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Scan homepage'}
-                </button>
-              </div>
-              <div className="scan-action-card">
-                <h4>Full site crawl</h4>
-                <p>
-                  Crawls up to {domain?.scanLimit ?? 10} pages with link discovery. Use for deep
-                  audits; may take several minutes.
-                </p>
-                <button
-                  className="btn btn-secondary"
-                  type="button"
-                  disabled={starting || !domain || hasRunningScan}
-                  onClick={startFullSiteScan}
-                >
-                  Full site ({domain?.scanLimit ?? 10} pages)
-                </button>
-              </div>
+            <div className="scan-action-card">
+              <h4>Full site crawl</h4>
+              <p>
+                Crawls up to {domain.scanLimit} pages with link discovery. Use for deep audits;
+                may take several minutes.
+              </p>
+              <button
+                className="btn btn-secondary"
+                type="button"
+                disabled={starting || hasRunningScan}
+                onClick={startFullSiteScan}
+              >
+                Full site ({domain.scanLimit} pages)
+              </button>
             </div>
           </div>
+        </section>
 
-          <div className="card" style={{ marginTop: '1rem' }}>
-            <div className="card-header">
-              <h2>Quick links</h2>
-            </div>
-            <p style={{ margin: 0, fontSize: '0.875rem' }}>
-              <Link href={`/websites/${domainId}`}>Website overview</Link>
-              <br />
-              <Link href={`/websites/${domainId}/consent`}>Consent configuration</Link>
+        <section className="website-domain-section" style={{ marginTop: '1.5rem' }}>
+          <div className="website-install-validate-header">
+            <h3>Scan history</h3>
+            <span className="card-meta">{scans.length} records</span>
+          </div>
+
+          {scans.length === 0 ? (
+            <p className="website-section-muted" style={{ marginTop: '1rem' }}>
+              No scans yet. Run a homepage scan to build your cookie inventory.
             </p>
-          </div>
-        </aside>
+          ) : (
+            <div className="data-table-wrap" style={{ marginTop: '1rem' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Started</th>
+                    <th>Status</th>
+                    <th>Pages</th>
+                    <th>Cookies</th>
+                    <th>Trackers</th>
+                    <th>Duration</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scans.map((scan) => {
+                    const pagePct =
+                      scan.maxPages > 0
+                        ? Math.round((scan.pagesScanned / scan.maxPages) * 100)
+                        : 0;
+                    return (
+                      <tr key={scan.id}>
+                        <td>
+                          <time dateTime={scan.createdAt}>{formatStarted(scan.createdAt)}</time>
+                        </td>
+                        <td>
+                          <ScanStatusBadge status={scan.status} />
+                          {scan.status === 'RUNNING' && (
+                            <>
+                              <div className="progress-track">
+                                <div
+                                  className="progress-fill"
+                                  style={{
+                                    width: `${scan.progressPercent ?? pagePct}%`,
+                                  }}
+                                />
+                              </div>
+                              <p className="progress-meta">
+                                {scan.pagesScanned}/{scan.maxPages} pages (
+                                {scan.progressPercent ?? pagePct}%)
+                              </p>
+                            </>
+                          )}
+                          {scan.errorMessage && (
+                            <p className="table-error">{scan.errorMessage}</p>
+                          )}
+                        </td>
+                        <td className="data-table-num">
+                          {scan.pagesScanned}/{scan.maxPages}
+                        </td>
+                        <td className="data-table-num">{scan.cookiesFound}</td>
+                        <td className="data-table-num">{scan.trackersFound}</td>
+                        <td className="data-table-num">{formatDuration(scan.durationMs)}</td>
+                        <td>
+                          <div className="table-actions">
+                            {scan.status === 'RUNNING' && (
+                              <button
+                                className="btn-ghost btn-ghost-danger"
+                                type="button"
+                                disabled={cancellingId === scan.id}
+                                onClick={() => cancelScan(scan.id)}
+                              >
+                                {cancellingId === scan.id ? 'Stopping…' : 'Stop'}
+                              </button>
+                            )}
+                            {(scan.status === 'FAILED' || scan.status === 'CANCELLED') && (
+                              <button
+                                className="btn-ghost btn-ghost-primary"
+                                type="button"
+                                disabled={retryingId === scan.id || hasRunningScan}
+                                onClick={() => retryScan(scan.id)}
+                              >
+                                {retryingId === scan.id ? 'Restarting…' : 'Run again'}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
+    </>
+  );
+}
+
+export default function WebsiteScansPage() {
+  const params = useParams();
+  const domainId = params.id as string;
+  const [domain, setDomain] = useState<Domain | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      setError('');
+      await fetch('/api/auth/sync', { method: 'POST', credentials: 'include' });
+      const result = await apiFetch<Domain>(`/domains/${domainId}`);
+      if (result.data) {
+        setDomain(result.data);
+      } else if (result.error?.code === 'UNAUTHORIZED') {
+        setError('Session expired. Please sign in again.');
+      } else {
+        setError(result.error?.message ?? 'Website not found');
+      }
+      setLoading(false);
+    }
+    load();
+  }, [domainId]);
+
+  return (
+    <ProtectedLayout>
+      {loading ? (
+        <LoadingScreen message="Loading scans…" inline />
+      ) : !domain ? (
+        <div className="card">
+          <p className="error">{error || 'Website not found.'}</p>
+        </div>
+      ) : (
+        <WebsiteLayout
+          domainId={domainId}
+          hostname={domain.hostname}
+          domainKey={domain.domainKey}
+          verificationStatus={domain.verificationStatus}
+        >
+          <WebsiteScansContent domain={domain} />
+        </WebsiteLayout>
+      )}
     </ProtectedLayout>
   );
 }

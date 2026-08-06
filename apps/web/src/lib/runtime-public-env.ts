@@ -15,11 +15,21 @@ function isProductionWebHost(): boolean {
   return window.location.hostname.includes('consent-management-web');
 }
 
+/** Ensure API base URL always includes /api/v1 for REST calls. */
+export function normalizeApiBaseUrl(url: string): string {
+  const trimmed = url.trim().replace(/\/$/, '');
+  if (!trimmed) return trimmed;
+  if (trimmed.endsWith('/api/v1')) return trimmed;
+  if (/\/api\/v\d+$/i.test(trimmed)) return trimmed;
+  return `${trimmed}/api/v1`;
+}
+
 export function getRuntimePublicEnvScript(): string | null {
-  const apiUrl =
-    process.env.API_URL?.trim() ||
+  const apiUrl = normalizeApiBaseUrl(
     process.env.NEXT_PUBLIC_API_URL?.trim() ||
-    (process.env.NODE_ENV === 'production' ? PRODUCTION_API_URL : undefined);
+      process.env.API_URL?.trim() ||
+      (process.env.NODE_ENV === 'production' ? PRODUCTION_API_URL : 'http://localhost:4000'),
+  );
   const appUrl = process.env.APP_BASE_URL?.trim();
   if (!apiUrl && !appUrl) return null;
   const payload = JSON.stringify({ apiUrl, appUrl });
@@ -28,7 +38,7 @@ export function getRuntimePublicEnvScript(): string | null {
 
 export function getApiBaseUrl(): string {
   if (typeof window !== 'undefined' && window.__CMP_PUBLIC_ENV__?.apiUrl) {
-    return window.__CMP_PUBLIC_ENV__.apiUrl.replace(/\/$/, '');
+    return normalizeApiBaseUrl(window.__CMP_PUBLIC_ENV__.apiUrl);
   }
 
   if (isProductionWebHost()) {
@@ -37,7 +47,7 @@ export function getApiBaseUrl(): string {
 
   const fromEnv = process.env.NEXT_PUBLIC_API_URL ?? process.env.API_URL;
   if (fromEnv) {
-    return fromEnv.replace(/\/$/, '');
+    return normalizeApiBaseUrl(fromEnv);
   }
 
   if (process.env.NODE_ENV === 'production') {

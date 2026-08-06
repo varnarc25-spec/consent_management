@@ -3,15 +3,14 @@ import { NextResponse } from 'next/server';
 import { isAuth0Configured, appBaseUrlMatchesHost } from '@cmp/auth';
 import { getAuth0 } from './lib/auth0';
 
-const PUBLIC = ['/auth'];
-const PROTECTED = ['/dashboard', '/settings', '/onboarding', '/verify-email', '/websites'];
+const PROTECTED_PREFIXES = ['/dashboard', '/settings', '/onboarding', '/verify-email', '/websites'];
 
-function isPublicPath(pathname: string) {
-  return PUBLIC.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+function isAuthRoute(pathname: string) {
+  return pathname === '/auth' || pathname.startsWith('/auth/');
 }
 
 function isProtectedPath(pathname: string) {
-  return PROTECTED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  return PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
 export async function middleware(request: NextRequest) {
@@ -28,54 +27,40 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(home);
     }
 
-    const isAuthRoute = pathname === '/auth' || pathname.startsWith('/auth/');
-
-    if (isAuthRoute) {
-      if (!isAuth0Configured()) {
-        const adminUrl =
-          process.env.NEXT_PUBLIC_ADMIN_URL?.replace(/\/$/, '') ||
-          'https://consent-management-admin-414895350436.us-central1.run.app';
-        const loginPath = pathname === '/auth/logout' ? '/auth/logout' : '/auth/login';
-        const target = new URL(`${adminUrl}${loginPath}`);
-        request.nextUrl.searchParams.forEach((value, key) => {
-          target.searchParams.set(key, value);
-        });
-        return NextResponse.redirect(target);
-      }
-      try {
-        return await getAuth0().middleware(request);
-      } catch (err) {
-        console.error('[middleware] Auth route error:', err);
-        const home = new URL('/', request.url);
-        home.searchParams.set('login_error', 'Sign-in failed. Please try again.');
-        return NextResponse.redirect(home);
-      }
-    }
-
-    if (isAuth0Configured() && isProtectedPath(pathname) && !isPublicPath(pathname)) {
-      try {
-        const session = await getAuth0().getSession(request);
-        if (!session?.user) {
-          const login = new URL('/auth/login', request.url);
-          login.searchParams.set('returnTo', pathname + request.nextUrl.search);
-          return NextResponse.redirect(login);
-        }
-      } catch (err) {
-        console.error('[middleware] Protected route session check:', err);
-        return NextResponse.redirect(new URL('/auth/login', request.url));
-      }
+    if (isAuthRoute(pathname) && !isAuth0Configured()) {
+      const adminUrl =
+        process.env.NEXT_PUBLIC_ADMIN_URL?.replace(/\/$/, '') ||
+        'https://consent-management-admin-414895350436.us-central1.run.app';
+      const loginPath = pathname === '/auth/logout' ? '/auth/logout' : '/auth/login';
+      const target = new URL(`${adminUrl}${loginPath}`);
+      request.nextUrl.searchParams.forEach((value, key) => {
+        target.searchParams.set(key, value);
+      });
+      return NextResponse.redirect(target);
     }
 
     if (!isAuth0Configured() || !appBaseUrlMatchesHost(request.nextUrl.host)) {
       return NextResponse.next();
     }
 
-    return await getAuth0().middleware(request);
+    const authResponse = await getAuth0().middleware(request);
+
+    if (isAuthRoute(pathname)) {
+      return authResponse;
+    }
+
+    if (isProtectedPath(pathname)) {
+      const session = await getAuth0().getSession(request);
+      if (!session?.user) {
+        const login = new URL('/auth/login', request.url);
+        login.searchParams.set('returnTo', `${pathname}${request.nextUrl.search}`);
+        return NextResponse.redirect(login);
+      }
+    }
+
+    return authResponse;
   } catch (err) {
     console.error('[middleware] Fatal auth error:', err);
-    if (isProtectedPath(request.nextUrl.pathname)) {
-      return NextResponse.redirect(new URL('/auth/login', request.url));
-    }
     return NextResponse.next();
   }
 }
