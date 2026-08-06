@@ -2,7 +2,11 @@
  * Local probe: same scanner path as production homepage scans.
  * Usage: pnpm --filter @cmp/api scan:homepage-probe -- https://varnarc.com/
  * (pnpm may pass a literal "--" argument; the script skips it.)
+ *
+ * First time: pnpm --filter @cmp/api playwright:install
  */
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { runWebsiteScan } from '../src/scans/scanner/scanner.engine';
 import { dedupeFindings } from '../src/scans/scanner/capture.util';
 import {
@@ -10,6 +14,13 @@ import {
   shouldIncludeInInventory,
 } from '../src/cookies/scan-findings-ingest';
 import { getHostname } from '../src/scans/scanner/crawl.util';
+
+if (!process.env.PLAYWRIGHT_BROWSERS_PATH && process.env.HOME) {
+  const macCache = join(process.env.HOME, 'Library/Caches/ms-playwright');
+  if (existsSync(macCache)) {
+    process.env.PLAYWRIGHT_BROWSERS_PATH = macCache;
+  }
+}
 
 function parseStartUrl(): string {
   const urlArg = process.argv
