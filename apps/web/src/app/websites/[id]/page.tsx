@@ -6,7 +6,6 @@ import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
 import { LoadingScreen } from '@/components/loading-screen';
 import { WebsiteSetupSteps } from '@/components/website-setup-steps';
-import { WebsiteDomainOverview } from '@/components/website-domain-overview';
 import { WebsiteLayout } from '@/components/website-layout';
 import { apiFetch } from '@/lib/api';
 
@@ -181,7 +180,17 @@ export default function DomainDetailPage() {
           </Link>
         </div>
       ) : (
-        <WebsiteLayout domainId={id} hostname={domain.hostname}>
+        <WebsiteLayout
+          domainId={id}
+          hostname={domain.hostname}
+          overview={{
+            domainId: domain.id,
+            scanLimit: domain.scanLimit,
+            scanFrequency: settings.scanFrequency,
+            nextScanAt: domain.nextScanAt,
+            onFrequencyChange: (f) => setSettings((s) => ({ ...s, scanFrequency: f })),
+          }}
+        >
       <h1>{domain.hostname}</h1>
       <p style={{ color: 'var(--muted)' }}>
         Key: <code>{domain.domainKey}</code> · Verification: {domain.verificationStatus}
@@ -195,16 +204,7 @@ export default function DomainDetailPage() {
       {message && <p className="success">{message}</p>}
       {error && <p className="error">{error}</p>}
 
-      <WebsiteDomainOverview
-        domainId={domain.id}
-        hostname={domain.hostname}
-        scanLimit={domain.scanLimit}
-        scanFrequency={settings.scanFrequency}
-        nextScanAt={domain.nextScanAt}
-        onFrequencyChange={(f) => setSettings((s) => ({ ...s, scanFrequency: f }))}
-      />
-
-      <div className="card website-setup-card" style={{ marginTop: '1.5rem' }}>
+      <div className="card website-setup-card" style={{ marginTop: '0' }}>
         <WebsiteSetupSteps
           domainId={domain.id}
           hostname={domain.hostname}

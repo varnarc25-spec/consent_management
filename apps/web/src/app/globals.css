@@ -498,6 +498,26 @@ code {
   gap: 1.25rem;
   align-items: start;
 }
+.domain-overview-merged-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+.domain-overview-status,
+.domain-overview-cookies {
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .domain-overview-merged-grid {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+  .domain-overview-cookies {
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+  }
+}
 .domain-stat-row {
   display: flex;
   justify-content: space-between;
@@ -544,7 +564,7 @@ code {
 /* Website detail sidebar */
 .website-layout {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: 320px minmax(0, 1fr);
   gap: 2rem;
   align-items: start;
 }
@@ -559,6 +579,8 @@ code {
   border-radius: var(--radius);
   padding: 1.25rem 1rem;
   box-shadow: var(--shadow-sm);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
 }
 .website-sidebar-header {
   margin-bottom: 1rem;
@@ -601,9 +623,69 @@ code {
   background: color-mix(in srgb, var(--primary) 12%, transparent);
   color: var(--primary);
 }
+.website-sidebar-panels {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.website-sidebar-section {
+  margin: 0;
+}
+.website-sidebar-section-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+.website-sidebar-panel {
+  padding: 1rem;
+  box-shadow: none;
+}
+.website-sidebar-panel h3 {
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+}
+.website-sidebar-muted {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+  line-height: 1.45;
+}
+.website-sidebar-note {
+  font-size: 0.8125rem;
+  margin: 0 0 0.75rem;
+}
+.website-sidebar-note.success {
+  color: var(--success, #166534);
+}
+.website-sidebar-divider {
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.25rem;
+}
+.website-sidebar-stack.domain-overview-merged-grid {
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+.domain-cookie-total-sidebar {
+  font-size: 1.75rem;
+  margin: 0.25rem 0 0.75rem;
+}
+.domain-scan-now-label {
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin: 0 0 0.25rem;
+}
+.domain-scan-now-inline .btn {
+  width: 100%;
+  margin-top: 0.5rem;
+}
 .website-sidebar-back {
   display: block;
-  margin-top: 1.25rem;
+  margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border);
   font-size: 0.8125rem;
@@ -612,12 +694,18 @@ code {
 .website-sidebar-back:hover {
   color: var(--primary);
 }
+@media (max-width: 1100px) {
+  .website-layout {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
+}
 @media (max-width: 900px) {
   .website-layout {
     grid-template-columns: 1fr;
   }
   .website-sidebar {
     position: static;
+    max-height: none;
   }
   .website-sidebar-nav {
     flex-direction: row;

@@ -66,7 +66,6 @@ export interface WebsiteDomainOverviewProps {
 export function WebsiteDomainOverview({
   domainId,
   hostname,
-  scanLimit,
   scanFrequency,
   nextScanAt,
   onFrequencyChange,
@@ -191,124 +190,121 @@ export function WebsiteDomainOverview({
   }
 
   return (
-    <>
+    <div className="website-sidebar-panels">
       {hasRunningScan && (
-        <p className="success" role="status">
+        <p className="website-sidebar-note success" role="status">
           Scan in progress
           {runningScan?.maxPages
-            ? ` (${runningScan.pagesScanned ?? 0}/${runningScan.maxPages} pages, ${runningScan.cookiesFound ?? 0} cookies, ${runningScan.trackersFound ?? 0} trackers)`
+            ? ` (${runningScan.pagesScanned ?? 0}/${runningScan.maxPages} pages)`
             : ''}
-          — updates every few seconds (scan progress only).
         </p>
       )}
+      {message && <p className="website-sidebar-note success">{message}</p>}
 
-      {message && <p className="success">{message}</p>}
-
-      <div className="domain-bottom-row">
-        <section className="domain-section domain-section-in-row">
-          <h2 className="domain-section-title">Overview</h2>
-          <div className="domain-overview-grid">
-          <div className="domain-panel">
-            <h3>Status</h3>
-            <div className="domain-stat-row">
-              <span className="domain-stat-label">Last scan</span>
-              <span className="domain-stat-value">
-                {lastCompletedScan?.completedAt
-                  ? formatScanDate(lastCompletedScan.completedAt)
-                  : hasRunningScan
-                    ? 'Running…'
-                    : '—'}
-              </span>
-            </div>
-            <div className="domain-stat-row">
-              <span className="domain-stat-label">Next scan</span>
-              <span className="domain-stat-value">
-                {nextScanAt && frequency !== 'MANUAL'
-                  ? formatScanDate(nextScanAt)
-                  : 'Not scheduled'}
-              </span>
-            </div>
-            {lastCompletedScan?.errorMessage && (
-              <p className="error" style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>
-                {lastCompletedScan.errorMessage}
-              </p>
-            )}
-            {lastCompletedScan && (
+      <section className="website-sidebar-section">
+        <h2 className="website-sidebar-section-title">Overview</h2>
+        <div className="domain-panel website-sidebar-panel domain-overview-merged">
+          <div className="domain-overview-merged-grid website-sidebar-stack">
+            <div className="domain-overview-status">
+              <h3>Status</h3>
               <div className="domain-stat-row">
-                <span className="domain-stat-label">Scanned subpages</span>
+                <span className="domain-stat-label">Last scan</span>
                 <span className="domain-stat-value">
-                  {lastCompletedScan.pagesScanned} subpages{' '}
-                  <button
-                    className="btn-link"
-                    type="button"
-                    onClick={() => downloadPagesCsv(lastCompletedScan.id)}
-                  >
-                    Download CSV
-                  </button>
+                  {lastCompletedScan?.completedAt
+                    ? formatScanDate(lastCompletedScan.completedAt)
+                    : hasRunningScan
+                      ? 'Running…'
+                      : '—'}
                 </span>
               </div>
-            )}
-          </div>
+              <div className="domain-stat-row">
+                <span className="domain-stat-label">Next scan</span>
+                <span className="domain-stat-value">
+                  {nextScanAt && frequency !== 'MANUAL'
+                    ? formatScanDate(nextScanAt)
+                    : 'Not scheduled'}
+                </span>
+              </div>
+              {lastCompletedScan?.errorMessage && (
+                <p className="error" style={{ fontSize: '0.8125rem', marginTop: '0.5rem' }}>
+                  {lastCompletedScan.errorMessage}
+                </p>
+              )}
+              {lastCompletedScan && (
+                <div className="domain-stat-row">
+                  <span className="domain-stat-label">Subpages</span>
+                  <span className="domain-stat-value">
+                    {lastCompletedScan.pagesScanned}{' '}
+                    <button
+                      className="btn-link"
+                      type="button"
+                      onClick={() => downloadPagesCsv(lastCompletedScan.id)}
+                    >
+                      CSV
+                    </button>
+                  </span>
+                </div>
+              )}
+            </div>
 
-          <div className="domain-panel">
-            <h3>Cookies and Trackers</h3>
-            <p className="domain-cookie-total">{cookieSummary?.total ?? 0}</p>
-            {summaryError && (
-              <p className="error" style={{ fontSize: '0.875rem' }}>{summaryError}</p>
-            )}
-            {categoriesWithCounts.length > 0 ? (
-              <ul className="domain-category-list">
-                {categoriesWithCounts.map((c) => (
-                  <li key={c.slug}>
-                    <span>{c.label}</span>
-                    <span>{c.count}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
-                {hasRunningScan
-                  ? 'Waiting for scan results…'
-                  : 'No cookies or trackers in inventory yet. Run a domain scan below.'}
+            <div className="domain-overview-cookies website-sidebar-divider">
+              <h3>Cookies &amp; trackers</h3>
+              <p className="domain-cookie-total domain-cookie-total-sidebar">
+                {cookieSummary?.total ?? 0}
               </p>
-            )}
-            <Link className="domain-panel-link" href={`/websites/${domainId}/scans`}>
-              View scans and cookie findings →
-            </Link>
-          </div>
-          </div>
-        </section>
-
-        <section className="domain-section domain-section-in-row">
-          <h2 className="domain-section-title">Scan settings</h2>
-          <p className="domain-section-hint">
-            Choose how often {hostname} should be scanned automatically. Save website settings below
-            after changing frequency. Manual scans use homepage-only mode for a quick inventory check.
-          </p>
-          <div className="domain-scan-grid">
-          <div className="domain-panel">
-            <div className="field" style={{ marginBottom: 0 }}>
-              <label htmlFor="webScanFrequency">Scan frequency</label>
-              <select
-                id="webScanFrequency"
-                value={frequency}
-                onChange={(e) => {
-                  setFrequency(e.target.value);
-                  onFrequencyChange?.(e.target.value);
-                }}
-              >
-                <option value="MANUAL">Manual</option>
-                <option value="DAILY">Daily</option>
-                <option value="WEEKLY">Weekly</option>
-                <option value="MONTHLY">Monthly</option>
-              </select>
+              {summaryError && (
+                <p className="error" style={{ fontSize: '0.8125rem' }}>{summaryError}</p>
+              )}
+              {categoriesWithCounts.length > 0 ? (
+                <ul className="domain-category-list">
+                  {categoriesWithCounts.map((c) => (
+                    <li key={c.slug}>
+                      <span>{c.label}</span>
+                      <span>{c.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="website-sidebar-muted">
+                  {hasRunningScan
+                    ? 'Waiting for scan results…'
+                    : 'No inventory yet. Run a homepage scan.'}
+                </p>
+              )}
+              <Link className="domain-panel-link" href={`/websites/${domainId}/scans`}>
+                View scans →
+              </Link>
             </div>
           </div>
-          <div className="domain-panel domain-scan-now-card">
-            <p>Scan homepage now</p>
-            <p style={{ color: 'var(--muted)', fontSize: '0.8125rem', margin: '0.25rem 0 0.75rem' }}>
-              One page, full consent probe — usually under a minute.
-            </p>
+        </div>
+      </section>
+
+      <section className="website-sidebar-section">
+        <h2 className="website-sidebar-section-title">Scan settings</h2>
+        <div className="domain-panel website-sidebar-panel domain-scan-merged">
+          <p className="website-sidebar-muted">
+            Save website settings after changing frequency. Homepage scans use one page with full
+            consent probing.
+          </p>
+          <div className="field" style={{ marginBottom: '1rem' }}>
+            <label htmlFor="webScanFrequency">Scan frequency</label>
+            <select
+              id="webScanFrequency"
+              value={frequency}
+              onChange={(e) => {
+                setFrequency(e.target.value);
+                onFrequencyChange?.(e.target.value);
+              }}
+            >
+              <option value="MANUAL">Manual</option>
+              <option value="DAILY">Daily</option>
+              <option value="WEEKLY">Weekly</option>
+              <option value="MONTHLY">Monthly</option>
+            </select>
+          </div>
+          <div className="domain-scan-now-inline">
+            <p className="domain-scan-now-label">Scan homepage now</p>
+            <p className="website-sidebar-muted">Usually under a minute.</p>
             <button
               className="btn"
               type="button"
@@ -318,9 +314,8 @@ export function WebsiteDomainOverview({
               {startingScan ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Scan homepage'}
             </button>
           </div>
-          </div>
-        </section>
-      </div>
-    </>
+        </div>
+      </section>
+    </div>
   );
 }
