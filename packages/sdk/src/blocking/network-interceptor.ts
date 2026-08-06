@@ -36,7 +36,7 @@ export class NetworkInterceptor {
       const decision = self.options.evaluate(url, 'fetch');
       if (decision?.action === 'block') {
         self.record(decision, url, 'fetch');
-        return Promise.resolve(new Response('', { status: 204, statusText: 'CMP Blocked' }));
+        return Promise.resolve(new Response(null, { status: 204, statusText: 'CMP Blocked' }));
       }
       if (decision?.action === 'log') self.record(decision, url, 'fetch');
       return self.originalFetch(input, init);
