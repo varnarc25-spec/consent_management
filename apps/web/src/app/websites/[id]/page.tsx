@@ -213,164 +213,166 @@ export default function DomainDetailPage() {
         />
       </div>
 
-      <div className="card website-settings-merged" style={{ marginTop: '1.5rem' }}>
-        <div className="website-settings-split">
-          <div className="website-settings-col">
-            <h3>Website settings</h3>
-            <form onSubmit={saveSettings}>
-              <div className="field">
-                <label htmlFor="enabled">Status</label>
-                <select
-                  id="enabled"
-                  value={settings.enabled ? 'true' : 'false'}
-                  onChange={(e) => setSettings({ ...settings, enabled: e.target.value === 'true' })}
-                >
-                  <option value="true">Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="groupName">Domain group</label>
-                <input
-                  id="groupName"
-                  value={settings.groupName}
-                  onChange={(e) => setSettings({ ...settings, groupName: e.target.value })}
-                  placeholder="e.g. Marketing sites"
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="scanLimit">Scan page limit</label>
-                <input
-                  id="scanLimit"
-                  type="number"
-                  min={1}
-                  max={1000}
-                  value={settings.scanLimit}
-                  onChange={(e) => setSettings({ ...settings, scanLimit: Number(e.target.value) })}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="autoBlocking">Auto-blocking</label>
-                <select
-                  id="autoBlocking"
-                  value={settings.autoBlocking ? 'true' : 'false'}
-                  onChange={(e) => setSettings({ ...settings, autoBlocking: e.target.value === 'true' })}
-                >
-                  <option value="true">Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
-              </div>
-              <button className="btn btn-secondary" type="submit">Save settings</button>
-            </form>
+      <div className="card website-domain-merged" style={{ marginTop: '1.5rem' }}>
+        <div className="website-domain-split">
+          <div className="website-domain-left">
+            <section className="website-domain-section">
+              <h3>Website settings</h3>
+              <form onSubmit={saveSettings}>
+                <div className="field">
+                  <label htmlFor="enabled">Status</label>
+                  <select
+                    id="enabled"
+                    value={settings.enabled ? 'true' : 'false'}
+                    onChange={(e) => setSettings({ ...settings, enabled: e.target.value === 'true' })}
+                  >
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="groupName">Domain group</label>
+                  <input
+                    id="groupName"
+                    value={settings.groupName}
+                    onChange={(e) => setSettings({ ...settings, groupName: e.target.value })}
+                    placeholder="e.g. Marketing sites"
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="scanLimit">Scan page limit</label>
+                  <input
+                    id="scanLimit"
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={settings.scanLimit}
+                    onChange={(e) => setSettings({ ...settings, scanLimit: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="autoBlocking">Auto-blocking</label>
+                  <select
+                    id="autoBlocking"
+                    value={settings.autoBlocking ? 'true' : 'false'}
+                    onChange={(e) => setSettings({ ...settings, autoBlocking: e.target.value === 'true' })}
+                  >
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                </div>
+                <button className="btn btn-secondary" type="submit">Save settings</button>
+              </form>
+            </section>
+
+            <section className="website-domain-section" id="setup-verify">
+              <h3>Domain verification</h3>
+              <p className="website-section-muted">
+                Status: <strong>{domain.verificationStatus}</strong>
+                {domain.verificationStatus === 'VERIFIED'
+                  ? ' — verified automatically. No DNS, meta tags, or verification files are required on your website.'
+                  : ' — will verify automatically when the CMP script loads on your site.'}
+              </p>
+              {domain.verificationStatus !== 'VERIFIED' && instructions && (
+                <>
+                  <div className="website-section-muted" style={{ marginBottom: '1rem' }}>
+                    <p><strong>Optional manual checks</strong> (only if auto-verify is disabled):</p>
+                    <p><strong>DNS:</strong> {(instructions.dns_txt as { instructions: string })?.instructions}</p>
+                    <p><strong>Meta:</strong> {(instructions.meta_tag as { instructions: string })?.instructions}</p>
+                  </div>
+                  <div className="website-verify-actions">
+                    {['DNS_TXT', 'HTML_FILE', 'META_TAG', 'CMP_SCRIPT', 'MANUAL'].map((m) => (
+                      <button key={m} className="btn btn-secondary" type="button" onClick={() => verify(m)}>
+                        Verify via {m.replace('_', ' ')}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
           </div>
 
-          <div className="website-verify-col" id="setup-verify">
-            <h3>Domain verification</h3>
-            <p className="website-section-muted">
-              Status: <strong>{domain.verificationStatus}</strong>
-              {domain.verificationStatus === 'VERIFIED'
-                ? ' — verified automatically. No DNS, meta tags, or verification files are required on your website.'
-                : ' — will verify automatically when the CMP script loads on your site.'}
-            </p>
-            {domain.verificationStatus !== 'VERIFIED' && instructions && (
-              <>
-                <div className="website-section-muted" style={{ marginBottom: '1rem' }}>
-                  <p><strong>Optional manual checks</strong> (only if auto-verify is disabled):</p>
-                  <p><strong>DNS:</strong> {(instructions.dns_txt as { instructions: string })?.instructions}</p>
-                  <p><strong>Meta:</strong> {(instructions.meta_tag as { instructions: string })?.instructions}</p>
-                </div>
-                <div className="website-verify-actions">
-                  {['DNS_TXT', 'HTML_FILE', 'META_TAG', 'CMP_SCRIPT', 'MANUAL'].map((m) => (
-                    <button key={m} className="btn btn-secondary" type="button" onClick={() => verify(m)}>
-                      Verify via {m.replace('_', ' ')}
-                    </button>
-                  ))}
-                </div>
-              </>
+          <div className="website-domain-right" id="setup-install">
+            <section className="website-domain-section">
+              <h3>Installation script</h3>
+              {install && (
+                <>
+                  <pre className="website-install-snippet">{install.snippet}</pre>
+                  <button className="btn" style={{ marginTop: '1rem' }} type="button" onClick={copySnippet}>
+                    Copy script
+                  </button>
+                  <div className="field" style={{ marginTop: '1rem' }}>
+                    <label htmlFor="guide">Platform guide</label>
+                    <select id="guide" value={guide} onChange={(e) => setGuide(e.target.value)}>
+                      {Object.keys(install.guides).map((k) => (
+                        <option key={k} value={k}>{k.toUpperCase()}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="website-section-muted">{install.guides[guide]}</p>
+                </>
+              )}
+            </section>
+
+            <section className="website-domain-section" id="setup-validate">
+              <div className="website-install-validate-header">
+                <h3>Installation validation</h3>
+                <button className="btn btn-secondary" type="button" onClick={runValidation}>
+                  Run validation
+                </button>
+              </div>
+              {validation && (
+                <>
+                  <p style={{ marginTop: '1rem' }}>
+                    Overall: <strong>{validation.overallStatus}</strong>
+                  </p>
+                  <table style={{ marginTop: '1rem' }}>
+                    <thead>
+                      <tr>
+                        <th>Check</th>
+                        <th>Status</th>
+                        <th>Message</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {validation.checks.map((c) => (
+                        <tr key={c.id}>
+                          <td>{c.label}</td>
+                          <td>{c.status}</td>
+                          <td>{c.message}{c.remediation ? ` — ${c.remediation}` : ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+            </section>
+
+            {history.length > 0 && (
+              <section className="website-domain-section">
+                <h3>Validation history</h3>
+                <table style={{ marginTop: '1rem' }}>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Status</th>
+                      <th>Checks</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.map((item) => (
+                      <tr key={item.id}>
+                        <td>{new Date(item.createdAt).toLocaleString()}</td>
+                        <td>{item.overallStatus}</td>
+                        <td>{Array.isArray(item.checks) ? item.checks.length : 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
             )}
           </div>
         </div>
-      </div>
-
-      <div className="card website-install-merged" id="setup-install" style={{ marginTop: '1.5rem' }}>
-        <section className="website-install-section">
-          <h3>Installation script</h3>
-          {install && (
-            <>
-              <pre className="website-install-snippet">{install.snippet}</pre>
-              <button className="btn" style={{ marginTop: '1rem' }} type="button" onClick={copySnippet}>
-                Copy script
-              </button>
-              <div className="field" style={{ marginTop: '1rem' }}>
-                <label htmlFor="guide">Platform guide</label>
-                <select id="guide" value={guide} onChange={(e) => setGuide(e.target.value)}>
-                  {Object.keys(install.guides).map((k) => (
-                    <option key={k} value={k}>{k.toUpperCase()}</option>
-                  ))}
-                </select>
-              </div>
-              <p className="website-section-muted">{install.guides[guide]}</p>
-            </>
-          )}
-        </section>
-
-        <section className="website-install-section" id="setup-validate">
-          <div className="website-install-validate-header">
-            <h3>Installation validation</h3>
-            <button className="btn btn-secondary" type="button" onClick={runValidation}>
-              Run validation
-            </button>
-          </div>
-          {validation && (
-            <>
-              <p style={{ marginTop: '1rem' }}>
-                Overall: <strong>{validation.overallStatus}</strong>
-              </p>
-              <table style={{ marginTop: '1rem' }}>
-                <thead>
-                  <tr>
-                    <th>Check</th>
-                    <th>Status</th>
-                    <th>Message</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {validation.checks.map((c) => (
-                    <tr key={c.id}>
-                      <td>{c.label}</td>
-                      <td>{c.status}</td>
-                      <td>{c.message}{c.remediation ? ` — ${c.remediation}` : ''}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-        </section>
-
-        {history.length > 0 && (
-          <section className="website-install-section">
-            <h3>Validation history</h3>
-            <table style={{ marginTop: '1rem' }}>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Status</th>
-                  <th>Checks</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((item) => (
-                  <tr key={item.id}>
-                    <td>{new Date(item.createdAt).toLocaleString()}</td>
-                    <td>{item.overallStatus}</td>
-                    <td>{Array.isArray(item.checks) ? item.checks.length : 0}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        )}
       </div>
         </WebsiteLayout>
       )}
