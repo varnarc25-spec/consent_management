@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { BannerPreview } from '@/components/banner-preview';
 import { ProtectedLayout } from '@/components/protected-layout';
+import { WebsiteLayout } from '@/components/website-layout';
 import { apiFetch } from '@/lib/api';
 import { BANNER_TEXT_TEMPLATES } from '@cmp/utils/banner-templates';
 
@@ -388,7 +389,7 @@ export default function DomainConsentPage() {
 
   return (
     <ProtectedLayout>
-      <p><Link href={`/websites/${domainId}`}>← Back to domain</Link></p>
+      <WebsiteLayout domainId={domainId}>
       <h1>Consent configuration</h1>
       <p style={{ color: 'var(--muted)' }}>Manage categories, banner layout, behavior, and policy versions.</p>
 
@@ -831,6 +832,7 @@ export default function DomainConsentPage() {
           </table>
         </div>
       )}
+      </WebsiteLayout>
     </ProtectedLayout>
   );
 }

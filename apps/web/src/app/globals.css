@@ -469,7 +469,20 @@ code {
 
 /* Cookiebot-style domain overview (web + admin) */
 .domain-section { margin-bottom: 2rem; }
+.domain-section-in-row { margin-bottom: 0; }
 .domain-section-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; }
+.domain-section-hint {
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin: -0.5rem 0 1rem;
+}
+.domain-bottom-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  align-items: start;
+}
 .domain-panel {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -523,8 +536,93 @@ code {
   border-radius: 8px;
 }
 @media (max-width: 900px) {
+  .domain-bottom-row,
   .domain-overview-grid,
   .domain-scan-grid { grid-template-columns: 1fr; }
+}
+
+/* Website detail sidebar */
+.website-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 2rem;
+  align-items: start;
+}
+.website-main {
+  min-width: 0;
+}
+.website-sidebar {
+  position: sticky;
+  top: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1rem;
+  box-shadow: var(--shadow-sm);
+}
+.website-sidebar-header {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.website-sidebar-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0 0 0.25rem;
+}
+.website-sidebar-host {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  word-break: break-word;
+}
+.website-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.website-sidebar-nav a {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text);
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.website-sidebar-nav a:hover {
+  background: var(--surface-muted);
+}
+.website-sidebar-nav a.active {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+}
+.website-sidebar-back {
+  display: block;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.website-sidebar-back:hover {
+  color: var(--primary);
+}
+@media (max-width: 900px) {
+  .website-layout {
+    grid-template-columns: 1fr;
+  }
+  .website-sidebar {
+    position: static;
+  }
+  .website-sidebar-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
 }
 
 .field-hint {

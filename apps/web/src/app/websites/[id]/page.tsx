@@ -7,6 +7,7 @@ import { ProtectedLayout } from '@/components/protected-layout';
 import { LoadingScreen } from '@/components/loading-screen';
 import { WebsiteSetupSteps } from '@/components/website-setup-steps';
 import { WebsiteDomainOverview } from '@/components/website-domain-overview';
+import { WebsiteLayout } from '@/components/website-layout';
 import { apiFetch } from '@/lib/api';
 
 interface Domain {
@@ -180,8 +181,7 @@ export default function DomainDetailPage() {
           </Link>
         </div>
       ) : (
-        <>
-      <p><Link href="/dashboard">← Back to dashboard</Link> · <Link href={`/websites/${id}/consent`}>Consent configuration</Link> · <Link href={`/websites/${id}/test-banner`}>Test banner</Link></p>
+        <WebsiteLayout domainId={id} hostname={domain.hostname}>
       <h1>{domain.hostname}</h1>
       <p style={{ color: 'var(--muted)' }}>
         Key: <code>{domain.domainKey}</code> · Verification: {domain.verificationStatus}
@@ -370,7 +370,7 @@ export default function DomainDetailPage() {
           </table>
         </div>
       )}
-        </>
+        </WebsiteLayout>
       )}
     </ProtectedLayout>
   );

@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
+import { WebsiteLayout } from '@/components/website-layout';
 import { apiFetch, getApiUrl } from '@/lib/api';
 
 interface Domain {
@@ -45,9 +45,7 @@ export default function TestBannerPage() {
 
   return (
     <ProtectedLayout>
-      <p>
-        <Link href={`/websites/${domainId}/consent`}>← Back to consent configuration</Link>
-      </p>
+      <WebsiteLayout domainId={domainId} hostname={domain?.hostname}>
       <h1>Test banner</h1>
       <p style={{ color: 'var(--muted)' }}>
         Live preview of the published banner for <strong>{domain?.hostname ?? '…'}</strong>.
@@ -107,6 +105,7 @@ export default function TestBannerPage() {
           exactly as it would on your website.
         </p>
       </div>
+      </WebsiteLayout>
     </ProtectedLayout>
   );
 }

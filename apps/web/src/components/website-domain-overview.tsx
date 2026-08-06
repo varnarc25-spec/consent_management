@@ -204,9 +204,10 @@ export function WebsiteDomainOverview({
 
       {message && <p className="success">{message}</p>}
 
-      <section className="domain-section">
-        <h2 className="domain-section-title">Overview</h2>
-        <div className="domain-overview-grid">
+      <div className="domain-bottom-row">
+        <section className="domain-section domain-section-in-row">
+          <h2 className="domain-section-title">Overview</h2>
+          <div className="domain-overview-grid">
           <div className="domain-panel">
             <h3>Status</h3>
             <div className="domain-stat-row">
@@ -275,16 +276,16 @@ export function WebsiteDomainOverview({
               View scans and cookie findings →
             </Link>
           </div>
-        </div>
-      </section>
+          </div>
+        </section>
 
-      <section className="domain-section">
-        <h2 className="domain-section-title">Scan settings</h2>
-        <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginBottom: '1rem' }}>
-          Choose how often {hostname} should be scanned automatically. Save website settings below
-          after changing frequency. Manual scans use homepage-only mode for a quick inventory check.
-        </p>
-        <div className="domain-scan-grid">
+        <section className="domain-section domain-section-in-row">
+          <h2 className="domain-section-title">Scan settings</h2>
+          <p className="domain-section-hint">
+            Choose how often {hostname} should be scanned automatically. Save website settings below
+            after changing frequency. Manual scans use homepage-only mode for a quick inventory check.
+          </p>
+          <div className="domain-scan-grid">
           <div className="domain-panel">
             <div className="field" style={{ marginBottom: 0 }}>
               <label htmlFor="webScanFrequency">Scan frequency</label>
@@ -317,8 +318,9 @@ export function WebsiteDomainOverview({
               {startingScan ? 'Starting…' : hasRunningScan ? 'Scan running…' : 'Scan homepage'}
             </button>
           </div>
-        </div>
-      </section>
+          </div>
+        </section>
+      </div>
     </>
   );
 }
