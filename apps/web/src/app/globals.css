@@ -852,6 +852,65 @@ code {
   padding: 1.25rem;
 }
 
+.website-settings-split {
+  display: grid;
+  grid-template-columns: 30% minmax(0, 1fr);
+  gap: 2rem;
+  align-items: start;
+}
+.website-settings-col,
+.website-verify-col {
+  min-width: 0;
+}
+.website-verify-col {
+  padding-left: 2rem;
+  border-left: 1px solid var(--border);
+}
+.website-verify-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.website-section-muted {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin-bottom: 1rem;
+  line-height: 1.45;
+}
+.website-install-merged .website-install-section + .website-install-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+.website-install-validate-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+.website-install-validate-header h3 {
+  margin: 0;
+}
+.website-install-snippet {
+  background: var(--surface-muted);
+  padding: 1rem;
+  border-radius: 8px;
+  overflow: auto;
+  font-size: 0.75rem;
+  margin: 0;
+}
+@media (max-width: 900px) {
+  .website-settings-split {
+    grid-template-columns: 1fr;
+  }
+  .website-verify-col {
+    padding-left: 0;
+    border-left: none;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+}
+
 .website-setup-header {
   display: flex;
   justify-content: space-between;
