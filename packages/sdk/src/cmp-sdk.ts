@@ -351,8 +351,10 @@ export class CmpSdk {
     const config = this.bannerConfig();
     if (!config?.banner) return;
     this.bannerHandle?.destroy();
-    this.bannerHandle = renderBanner(config, (consent) =>
-      this.applyConsent(consent, 'banner_custom'),
+    this.bannerHandle = renderBanner(
+      config,
+      (consent) => this.applyConsent(consent, 'banner_custom'),
+      { initialConsent: this.getConsent() },
     );
     this.bannerHandle?.openPreferences();
   }
@@ -361,8 +363,10 @@ export class CmpSdk {
     const config = this.bannerConfig();
     if (!config?.banner) return;
     this.bannerHandle?.destroy();
-    this.bannerHandle = renderBanner(config, (consent) =>
-      this.applyConsent(consent, 'banner_custom'),
+    this.bannerHandle = renderBanner(
+      config,
+      (consent) => this.applyConsent(consent, 'banner_custom'),
+      { initialConsent: this.getConsent() },
     );
     this.bannerHandle?.show();
   }

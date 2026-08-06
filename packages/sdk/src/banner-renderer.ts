@@ -65,6 +65,11 @@ export interface BannerHandle {
   openPreferences: () => void;
 }
 
+export interface RenderBannerOptions {
+  /** Saved consent — used to pre-fill preference toggles when reopening. */
+  initialConsent?: Record<string, boolean>;
+}
+
 function sanitizeCustomCss(css: string | undefined) {
   if (!css?.trim()) return '';
   const blocked = [/@import/i, /expression\s*\(/i, /javascript:/i];
@@ -75,6 +80,7 @@ function sanitizeCustomCss(css: string | undefined) {
 export function renderBanner(
   config: CmpConfig,
   onConsent: (categories: Record<string, boolean>) => void,
+  options?: RenderBannerOptions,
 ): BannerHandle | null {
   const banner = config.banner;
   if (!banner || typeof document === 'undefined') return null;
@@ -153,6 +159,27 @@ export function renderBanner(
     const optional = optionalCategories();
     return optional.every((category) => reviewed.has(category.slug));
   }
+
+  function applyConsentToCustom(consent?: Record<string, boolean>) {
+    const source = consent ?? options?.initialConsent;
+    if (!source) return;
+    categories.forEach((category) => {
+      if (category.slug in source) {
+        custom[category.slug] = source[category.slug];
+        if (!category.required) reviewed.add(category.slug);
+      }
+    });
+  }
+
+  function ensureCustomDefaults() {
+    categories.forEach((category) => {
+      if (!(category.slug in custom)) {
+        custom[category.slug] = category.defaultState === 'ENABLED';
+      }
+    });
+  }
+
+  applyConsentToCustom();
 
   function renderView() {
     inner.innerHTML = '';
@@ -271,20 +298,14 @@ export function renderBanner(
       () => {
         if (multiStepIntro) {
           multiStep = 1;
-          categories.forEach((category) => {
-            if (!(category.slug in custom)) {
-              custom[category.slug] = category.defaultState === 'ENABLED';
-            }
-          });
+          applyConsentToCustom();
+          ensureCustomDefaults();
           renderView();
           return;
         }
         view = 'preferences';
-        categories.forEach((category) => {
-          if (!(category.slug in custom)) {
-            custom[category.slug] = category.defaultState === 'ENABLED';
-          }
-        });
+        applyConsentToCustom();
+        ensureCustomDefaults();
         renderView();
       },
     );
@@ -553,11 +574,8 @@ export function renderBanner(
   function openPreferences() {
     view = 'preferences';
     multiStep = 0;
-    categories.forEach((category) => {
-      if (!(category.slug in custom)) {
-        custom[category.slug] = category.defaultState === 'ENABLED';
-      }
-    });
+    applyConsentToCustom();
+    ensureCustomDefaults();
     if (!document.body.contains(root)) document.body.appendChild(root);
     renderView();
   }

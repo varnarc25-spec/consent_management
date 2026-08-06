@@ -173,6 +173,64 @@ describe('renderBanner', () => {
     handle?.destroy();
   });
 
+  it('reopens preferences with previously saved consent selections', () => {
+    document.body.innerHTML = '';
+    const onConsent = vi.fn();
+    const handle = renderBanner(
+      {
+        domainKey: 'dk_test',
+        configVersion: 1,
+        categories,
+        banner: {
+          title: 'Privacy',
+          description: 'We use cookies.',
+          acceptButton: 'Accept all',
+          rejectButton: 'Reject all',
+          preferencesButton: 'Manage preferences',
+          saveButton: 'Save preferences',
+          layout: 'center_modal',
+        },
+      },
+      onConsent,
+      { initialConsent: { strictly_necessary: true, analytics: true } },
+    );
+
+    handle?.openPreferences();
+
+    const analyticsToggle = document.getElementById('cmp-cat-analytics') as HTMLInputElement;
+    expect(analyticsToggle.checked).toBe(true);
+
+    analyticsToggle.checked = false;
+    analyticsToggle.dispatchEvent(new Event('change'));
+    (document.querySelector('[data-cmp-action="save-preferences"]') as HTMLButtonElement).click();
+    expect(onConsent).toHaveBeenCalledWith({ strictly_necessary: true, analytics: false });
+
+    handle?.destroy();
+
+    const reopen = renderBanner(
+      {
+        domainKey: 'dk_test',
+        configVersion: 1,
+        categories,
+        banner: {
+          title: 'Privacy',
+          description: 'We use cookies.',
+          acceptButton: 'Accept all',
+          rejectButton: 'Reject all',
+          preferencesButton: 'Manage preferences',
+          saveButton: 'Save preferences',
+          layout: 'center_modal',
+        },
+      },
+      vi.fn(),
+      { initialConsent: { strictly_necessary: true, analytics: false } },
+    );
+    reopen?.openPreferences();
+    const reopenedToggle = document.getElementById('cmp-cat-analytics') as HTMLInputElement;
+    expect(reopenedToggle.checked).toBe(false);
+    reopen?.destroy();
+  });
+
   it('renders consent metadata in preferences when provided', () => {
     document.body.innerHTML = '';
     const onConsent = vi.fn();
