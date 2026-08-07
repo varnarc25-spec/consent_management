@@ -122,6 +122,7 @@ export {
   resolveAppBaseUrlFromHeaders,
   getAuth0ClientOptions,
   appBaseUrlMatchesHost,
+  getRequestHost,
   AUTH0_CALLBACK_PATH,
   AUTH0_LOGIN_PATH,
   AUTH0_LOGOUT_PATH,

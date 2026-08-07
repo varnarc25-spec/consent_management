@@ -1,6 +1,11 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { isAuth0Configured, appBaseUrlMatchesHost } from '@cmp/auth';
+import {
+  getAppBaseUrl,
+  getRequestHost,
+  isAuth0Configured,
+  appBaseUrlMatchesHost,
+} from '@cmp/auth';
 import { getAuth0 } from './lib/auth0';
 
 const PROTECTED_PREFIXES = ['/dashboard', '/settings', '/onboarding', '/verify-email', '/websites'];
@@ -13,16 +18,29 @@ function isProtectedPath(pathname: string) {
   return PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
-export async function middleware(request: NextRequest) {
-  try {
-    const pathname = request.nextUrl.pathname;
+function loginUrl(request: NextRequest, returnTo?: string) {
+  const login = new URL('/auth/login', getAppBaseUrl());
+  if (returnTo) {
+    login.searchParams.set('returnTo', returnTo);
+  }
+  request.nextUrl.searchParams.forEach((value, key) => {
+    if (key !== 'returnTo') {
+      login.searchParams.set(key, value);
+    }
+  });
+  return login;
+}
 
+export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  try {
     if (pathname === '/auth/callback' && request.nextUrl.searchParams.has('error')) {
       const description =
         request.nextUrl.searchParams.get('error_description') ??
         request.nextUrl.searchParams.get('error') ??
         'Login failed';
-      const home = new URL('/', request.url);
+      const home = new URL('/', getAppBaseUrl());
       home.searchParams.set('login_error', description);
       return NextResponse.redirect(home);
     }
@@ -39,28 +57,36 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(target);
     }
 
-    if (!isAuth0Configured() || !appBaseUrlMatchesHost(request.nextUrl.host)) {
+    if (!isAuth0Configured()) {
+      return NextResponse.next();
+    }
+
+    if (isAuthRoute(pathname)) {
+      return await getAuth0().middleware(request);
+    }
+
+    const requestHost = getRequestHost(request.headers, request.nextUrl.host);
+    if (!appBaseUrlMatchesHost(requestHost)) {
       return NextResponse.next();
     }
 
     const authResponse = await getAuth0().middleware(request);
 
-    if (isAuthRoute(pathname)) {
-      return authResponse;
-    }
-
     if (isProtectedPath(pathname)) {
       const session = await getAuth0().getSession(request);
       if (!session?.user) {
-        const login = new URL('/auth/login', request.url);
-        login.searchParams.set('returnTo', `${pathname}${request.nextUrl.search}`);
-        return NextResponse.redirect(login);
+        return NextResponse.redirect(
+          loginUrl(request, `${pathname}${request.nextUrl.search}`),
+        );
       }
     }
 
     return authResponse;
   } catch (err) {
     console.error('[middleware] Fatal auth error:', err);
+    if (isAuthRoute(pathname)) {
+      return new NextResponse('Authentication is temporarily unavailable.', { status: 503 });
+    }
     return NextResponse.next();
   }
 }

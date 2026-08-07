@@ -113,6 +113,15 @@ export function getAuth0ClientOptions(
   return appBaseUrl ? { appBaseUrl } : {};
 }
 
+export function getRequestHost(
+  headers: HeaderLike,
+  fallbackHost: string,
+): string {
+  const forwardedHost = headers.get('x-forwarded-host');
+  const host = forwardedHost?.split(',')[0]?.trim() || headers.get('host') || fallbackHost;
+  return host.trim().toLowerCase();
+}
+
 export function appBaseUrlMatchesHost(
   host: string,
   env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
