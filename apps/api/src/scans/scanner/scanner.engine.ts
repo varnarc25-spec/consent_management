@@ -6,6 +6,8 @@ import {
   countFindingStats,
   dedupeFindings,
   domSnapshotToFindings,
+  frameStorageToFindings,
+  type FrameStorageSnapshot,
 } from './capture.util';
 import {
   discoverLinksFromFetchPage,
@@ -174,6 +176,65 @@ async function captureDomSnapshot(page: Page, networkUrls: string[]) {
   }, networkUrls);
 }
 
+async function captureFrameStorageSnapshots(page: Page): Promise<FrameStorageSnapshot[]> {
+  const snapshots: FrameStorageSnapshot[] = [];
+
+  for (const frame of page.frames()) {
+    if (frame === page.mainFrame()) continue;
+    const frameUrl = frame.url();
+    if (!frameUrl || frameUrl === 'about:blank' || frameUrl.startsWith('about:')) continue;
+
+    try {
+      const storage = await frame.evaluate(async () => {
+        const localStorage: Array<{ key: string; value: string }> = [];
+        try {
+          for (let i = 0; i < window.localStorage.length; i += 1) {
+            const key = window.localStorage.key(i);
+            if (!key) continue;
+            localStorage.push({ key, value: window.localStorage.getItem(key) ?? '' });
+          }
+        } catch {
+          /* ignore */
+        }
+
+        const sessionStorage: Array<{ key: string; value: string }> = [];
+        try {
+          for (let i = 0; i < window.sessionStorage.length; i += 1) {
+            const key = window.sessionStorage.key(i);
+            if (!key) continue;
+            sessionStorage.push({ key, value: window.sessionStorage.getItem(key) ?? '' });
+          }
+        } catch {
+          /* ignore */
+        }
+
+        let indexedDbNames: string[] = [];
+        try {
+          if ('indexedDB' in window && typeof indexedDB.databases === 'function') {
+            const databases = await indexedDB.databases();
+            indexedDbNames = databases.map((db) => db.name).filter(Boolean) as string[];
+          }
+        } catch {
+          /* ignore */
+        }
+
+        return { localStorage, sessionStorage, indexedDbNames };
+      });
+
+      snapshots.push({
+        frameUrl,
+        localStorage: storage.localStorage,
+        sessionStorage: storage.sessionStorage,
+        indexedDbNames: storage.indexedDbNames,
+      });
+    } catch {
+      /* cross-origin or detached frame */
+    }
+  }
+
+  return snapshots;
+}
+
 async function navigateForScan(
   page: Page,
   url: string,
@@ -265,8 +326,15 @@ async function scanPageState(
 
   const snapshot = await captureDomSnapshot(page, networkUrls);
   const domFindings = domSnapshotToFindings(snapshot, consentState, pageUrl, pageId, siteHostname);
+  const frameSnapshots = await captureFrameStorageSnapshots(page);
+  const frameFindings = frameStorageToFindings(
+    frameSnapshots,
+    consentState,
+    pageId,
+    siteHostname,
+  );
 
-  return [...cookieFindings, ...domFindings];
+  return [...cookieFindings, ...domFindings, ...frameFindings];
 }
 
 export async function runWebsiteScan(

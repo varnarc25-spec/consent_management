@@ -9,7 +9,18 @@ import {
 describe('scan-findings-ingest', () => {
   it('builds distinct inventory keys per finding type', () => {
     expect(buildInventoryKey('COOKIE', '_ga', '.varnarc.com')).toBe('_ga|.varnarc.com');
-    expect(buildInventoryKey('LOCAL_STORAGE', 'cmp_consent_dk_abc')).toBe('localStorage|cmp_consent_dk_abc');
+    expect(buildInventoryKey('LOCAL_STORAGE', 'cmp_consent_dk_abc')).toBe(
+      'localStorage||cmp_consent_dk_abc',
+    );
+    expect(
+      buildInventoryKey(
+        'LOCAL_STORAGE',
+        'LAST_RESULT_ENTRY_KEY',
+        null,
+        null,
+        'https://www.youtube-nocookie.com/embed/abc',
+      ),
+    ).toBe('localStorage|youtube-nocookie.com|LAST_RESULT_ENTRY_KEY');
     expect(
       buildInventoryKey('SCRIPT', 'Google Tag Manager', null, 'https://googletagmanager.com/gtm.js'),
     ).toBe('tracker|SCRIPT|Google Tag Manager|https://googletagmanager.com/gtm.js');

@@ -16,7 +16,8 @@ import type { AuditMeta } from '../organizations/organizations.service';
 import { CookiesService } from '../cookies/cookies.service';
 import { WebhookDeliveryService } from '../webhooks/webhook-delivery.service';
 import { runWebsiteScan, ScanCancelledError } from './scanner/scanner.engine';
-import { buildStartUrl } from './scanner/crawl.util';
+import { buildStartUrl, getHostname } from './scanner/crawl.util';
+import { countInventoryFromFindings } from '../cookies/scan-findings-ingest';
 import { nextScanAtFromFrequency } from '../domains/domains.service';
 
 export interface ScanSummaryResponse {
@@ -455,9 +456,13 @@ export class ScansService {
         return;
       }
 
-      const dbStats = await this.repos.scans.countFindingStatsForScan(scanId);
-      const cookiesFound = Math.max(result.cookiesFound, dbStats.cookies);
-      const trackersFound = Math.max(result.trackersFound, dbStats.trackers);
+      const inventoryScan = await this.repos.scans.findById(scanId);
+      const siteHostname = getHostname(inventoryScan?.startUrl ?? scan.startUrl) ?? '';
+      const inventoryStats = inventoryScan
+        ? countInventoryFromFindings(inventoryScan.findings, siteHostname)
+        : { inventoryItems: 0, cookies: 0, trackers: 0 };
+      const cookiesFound = inventoryStats.cookies;
+      const trackersFound = inventoryStats.trackers;
 
       await this.repos.scans.updateStatus(scanId, 'COMPLETED', {
         completedAt,

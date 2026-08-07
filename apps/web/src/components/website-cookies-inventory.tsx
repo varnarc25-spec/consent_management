@@ -13,13 +13,17 @@ export interface DomainCookieItem {
   purpose: string | null;
   duration: string | null;
   isThirdParty: boolean | null;
+  privacyPolicyUrl: string | null;
   riskLevel: string | null;
   reviewStatus: string;
   inventoryType: string;
   foundBeforeConsent: boolean;
   seenCount: number;
+  firstSeenAt: string;
   lastSeenAt: string;
   sourceUrl: string | null;
+  expiresAt: string | null;
+  metadata: Record<string, unknown> | null;
 }
 
 const INVENTORY_TYPE_LABELS: Record<string, string> = {

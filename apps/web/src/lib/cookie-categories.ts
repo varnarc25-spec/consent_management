@@ -28,6 +28,8 @@ export interface CookieCategoryCount {
 
 export interface CookieCategorySummary {
   total: number;
+  cookies: number;
+  trackers: number;
   categories: CookieCategoryCount[];
 }
 

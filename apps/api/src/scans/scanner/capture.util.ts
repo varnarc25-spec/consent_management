@@ -2,6 +2,15 @@ import { createHash } from 'node:crypto';
 import type { ScanConsentState, ScanFindingType, ScanFindingInput } from '@cmp/database';
 import { isTrackingPixelUrl, matchTracker } from './tracker-patterns';
 
+function hostnameFromUrl(url: string | null | undefined) {
+  if (!url) return '';
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
 export function hashValueSample(value: string | null | undefined) {
   if (!value) return null;
   const trimmed = value.length > 200 ? `${value.slice(0, 200)}…` : value;
@@ -174,6 +183,66 @@ export function domSnapshotToFindings(
       pageId,
       isThirdParty: !url.includes(siteHostname),
     });
+  }
+
+  return findings;
+}
+
+export interface FrameStorageSnapshot {
+  frameUrl: string;
+  localStorage: Array<{ key: string; value: string }>;
+  sessionStorage: Array<{ key: string; value: string }>;
+  indexedDbNames: string[];
+}
+
+export function frameStorageToFindings(
+  frames: FrameStorageSnapshot[],
+  consentState: ScanConsentState,
+  pageId: string | null,
+  siteHostname: string,
+): ScanFindingInput[] {
+  const findings: ScanFindingInput[] = [];
+  const site = siteHostname.toLowerCase();
+
+  for (const frame of frames) {
+    const frameHost = hostnameFromUrl(frame.frameUrl);
+    const isThirdParty =
+      frameHost.length > 0 && frameHost !== site && !frameHost.endsWith(`.${site}`);
+
+    for (const entry of frame.localStorage) {
+      findings.push({
+        findingType: 'LOCAL_STORAGE',
+        consentState,
+        name: entry.key,
+        valueSample: hashValueSample(entry.value),
+        pageUrl: frame.frameUrl,
+        pageId,
+        isThirdParty,
+      });
+    }
+
+    for (const entry of frame.sessionStorage) {
+      findings.push({
+        findingType: 'SESSION_STORAGE',
+        consentState,
+        name: entry.key,
+        valueSample: hashValueSample(entry.value),
+        pageUrl: frame.frameUrl,
+        pageId,
+        isThirdParty,
+      });
+    }
+
+    for (const dbName of frame.indexedDbNames) {
+      findings.push({
+        findingType: 'INDEXED_DB',
+        consentState,
+        name: dbName,
+        pageUrl: frame.frameUrl,
+        pageId,
+        isThirdParty,
+      });
+    }
   }
 
   return findings;

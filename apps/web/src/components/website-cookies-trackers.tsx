@@ -9,6 +9,7 @@ import {
   sortCookieCategories,
 } from '@/lib/cookie-categories';
 import { apiFetch } from '@/lib/api';
+import type { DomainCookieItem } from '@/components/website-cookies-inventory';
 
 interface ScanSummary {
   status: string;
@@ -26,6 +27,7 @@ export function WebsiteCookiesTrackers({
   const websiteScan = useWebsiteScan();
   const [scans, setScans] = useState<ScanSummary[]>([]);
   const [cookieSummary, setCookieSummary] = useState<CookieCategorySummary | null>(null);
+  const [inventoryTotal, setInventoryTotal] = useState<number | null>(null);
   const [summaryError, setSummaryError] = useState('');
 
   function loadScans(silent = true) {
@@ -48,9 +50,18 @@ export function WebsiteCookiesTrackers({
     );
   }
 
+  function loadInventoryCount(silent = true) {
+    return apiFetch<DomainCookieItem[]>(`/domains/${domainId}/cookies`, { silent }).then((r) => {
+      if (r.data) {
+        setInventoryTotal(r.data.length);
+      }
+    });
+  }
+
   useEffect(() => {
     loadScans(true);
     loadCookieSummary(true);
+    loadInventoryCount(true);
   }, [domainId]);
 
   useEffect(() => {
@@ -63,7 +74,7 @@ export function WebsiteCookiesTrackers({
     scans.some((s) => s.status === 'RUNNING') || Boolean(websiteScan?.hasRunningScan);
 
   const refreshAfterScan = useCallback(async () => {
-    await Promise.all([loadScans(true), loadCookieSummary(true)]);
+    await Promise.all([loadScans(true), loadCookieSummary(true), loadInventoryCount(true)]);
   }, [domainId]);
 
   useRunningScanPoll(
@@ -80,12 +91,20 @@ export function WebsiteCookiesTrackers({
   );
 
   const categoriesWithCounts = sortedCategories.filter((c) => c.count > 0);
+  const displayTotal = cookieSummary?.total ?? inventoryTotal ?? 0;
+  const cookieCount = cookieSummary?.cookies ?? null;
+  const trackerCount = cookieSummary?.trackers ?? null;
 
   const inner = (
     <>
       <p className="domain-cookie-total domain-cookie-total-sidebar">
-        {cookieSummary?.total ?? 0}
+        {displayTotal}
       </p>
+      {cookieCount != null && trackerCount != null && displayTotal > 0 && (
+        <p className="website-cookies-sidebar-split">
+          {cookieCount} cookies · {trackerCount} trackers
+        </p>
+      )}
       {summaryError && (
         <p className="error" style={{ fontSize: '0.8125rem' }}>{summaryError}</p>
       )}

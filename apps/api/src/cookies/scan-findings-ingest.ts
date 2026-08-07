@@ -1,6 +1,7 @@
 import type { ScanFindingType } from '@cmp/database';
 import { buildCookieKey } from './scan-comparison';
 import { matchTracker } from '../scans/scanner/tracker-patterns';
+import { getHostname } from '../scans/scanner/crawl.util';
 
 const INGESTIBLE_FINDING_TYPES: ScanFindingType[] = [
   'COOKIE',
@@ -19,6 +20,7 @@ export interface GroupedScanFinding {
   cookieName: string;
   cookieDomain: string | null;
   sourceUrl: string | null;
+  pageUrl: string | null;
   isThirdParty: boolean | null;
   expiresAt: Date | null;
   foundBeforeConsent: boolean;
@@ -31,16 +33,18 @@ export function buildInventoryKey(
   name: string,
   cookieDomain?: string | null,
   sourceUrl?: string | null,
+  pageUrl?: string | null,
 ): string {
+  const pageHost = pageUrl ? getHostname(pageUrl) ?? '' : '';
   switch (findingType) {
     case 'COOKIE':
       return buildCookieKey(name, cookieDomain ?? null);
     case 'LOCAL_STORAGE':
-      return `localStorage|${name}`;
+      return `localStorage|${pageHost}|${name}`;
     case 'SESSION_STORAGE':
-      return `sessionStorage|${name}`;
+      return `sessionStorage|${pageHost}|${name}`;
     case 'INDEXED_DB':
-      return `indexedDB|${name}`;
+      return `indexedDB|${pageHost}|${name}`;
     case 'SERVICE_WORKER':
       return `serviceWorker|${sourceUrl ?? name}`;
     case 'SCRIPT':
@@ -49,7 +53,7 @@ export function buildInventoryKey(
     case 'NETWORK_REQUEST':
       return `tracker|${findingType}|${name}|${sourceUrl ?? ''}`;
     default:
-      return `${findingType}|${name}|${cookieDomain ?? ''}|${sourceUrl ?? ''}`;
+      return `${findingType}|${name}|${cookieDomain ?? ''}|${sourceUrl ?? ''}|${pageHost}`;
   }
 }
 
@@ -60,6 +64,34 @@ export function resolveTrackerCategory(name: string, sourceUrl: string | null): 
   }
   const byName = matchTracker(name);
   if (byName) return byName.category;
+  return null;
+}
+
+export function resolveStorageCategory(pageUrl: string | null): string | null {
+  if (!pageUrl) return null;
+  const fromTracker = matchTracker(pageUrl);
+  if (fromTracker) return fromTracker.category;
+  const host = getHostname(pageUrl)?.toLowerCase() ?? '';
+  if (host.includes('youtube-nocookie') || host.includes('youtube.com')) {
+    return 'marketing';
+  }
+  return null;
+}
+
+export function resolveProviderDomain(entry: {
+  cookieDomain?: string | null;
+  sourceUrl?: string | null;
+  pageUrl?: string | null;
+}): string | null {
+  if (entry.cookieDomain) {
+    return entry.cookieDomain.replace(/^\./, '');
+  }
+  if (entry.sourceUrl) {
+    return getHostname(entry.sourceUrl);
+  }
+  if (entry.pageUrl) {
+    return getHostname(entry.pageUrl);
+  }
   return null;
 }
 
@@ -78,11 +110,22 @@ function isFirstPartyHost(hostname: string, siteHostname: string) {
 }
 
 /** Skip first-party app bundles; keep cookies, storage, and third-party / known trackers. */
+function isFirstPartyAppBundle(url: string, siteHostname: string) {
+  try {
+    const host = new URL(url).hostname;
+    if (!isFirstPartyHost(host, siteHostname)) return false;
+    return /\/_next\/|\/static\/chunks\/|webpack|hot-update/i.test(url);
+  } catch {
+    return false;
+  }
+}
+
 export function shouldIncludeInInventory(
   finding: {
     findingType: ScanFindingType;
     name: string;
     sourceUrl: string | null;
+    pageUrl?: string | null;
     isThirdParty: boolean | null;
     metadata: unknown;
   },
@@ -94,20 +137,23 @@ export function shouldIncludeInInventory(
     return true;
   }
 
+  if (finding.name === 'inline-script') return false;
+
   const candidateUrl =
     finding.sourceUrl ??
+    finding.pageUrl ??
     (finding.name.startsWith('http://') || finding.name.startsWith('https://') ? finding.name : null);
 
   if (candidateUrl && matchTracker(candidateUrl)) return true;
   if (matchTracker(finding.name)) return true;
   if (finding.isThirdParty) return true;
 
-  if (finding.name === 'inline-script') return false;
+  if (candidateUrl && isFirstPartyAppBundle(candidateUrl, siteHostname)) return false;
 
   if (candidateUrl && siteHostname) {
     try {
       const host = new URL(candidateUrl).hostname;
-      if (isFirstPartyHost(host, siteHostname)) return false;
+      if (!isFirstPartyHost(host, siteHostname)) return true;
     } catch {
       /* ignore invalid URL */
     }
@@ -123,6 +169,7 @@ export function groupScanFindingsForIngest(
     name: string;
     cookieDomain: string | null;
     sourceUrl: string | null;
+    pageUrl?: string | null;
     expiresAt: Date | null;
     isThirdParty: boolean | null;
     technology: string | null;
@@ -139,6 +186,7 @@ export function groupScanFindingsForIngest(
       finding.name,
       finding.cookieDomain ?? null,
       finding.sourceUrl ?? null,
+      finding.pageUrl ?? null,
     );
 
     const existing = grouped.get(inventoryKey);
@@ -158,6 +206,7 @@ export function groupScanFindingsForIngest(
       cookieName: finding.name,
       cookieDomain: finding.cookieDomain,
       sourceUrl: finding.sourceUrl,
+      pageUrl: finding.pageUrl ?? null,
       expiresAt: finding.expiresAt ?? existing?.expiresAt ?? null,
       isThirdParty: finding.isThirdParty ?? existing?.isThirdParty ?? null,
       foundBeforeConsent: Boolean(foundBeforeConsent),
@@ -167,4 +216,29 @@ export function groupScanFindingsForIngest(
   }
 
   return Array.from(grouped.values());
+}
+
+export function countInventoryFromFindings(
+  findings: Array<{
+    findingType: ScanFindingType;
+    consentState: string;
+    name: string;
+    cookieDomain: string | null;
+    sourceUrl: string | null;
+    pageUrl?: string | null;
+    expiresAt: Date | null;
+    isThirdParty: boolean | null;
+    technology: string | null;
+    metadata: unknown;
+  }>,
+  siteHostname: string,
+) {
+  const inventoryFindings = findings.filter((f) => shouldIncludeInInventory(f, siteHostname));
+  const grouped = groupScanFindingsForIngest(inventoryFindings);
+  const cookies = grouped.filter(
+    (g) =>
+      g.findingType === 'COOKIE' || isStorageFindingType(g.findingType),
+  ).length;
+  const trackers = grouped.filter((g) => isTrackerFindingType(g.findingType)).length;
+  return { inventoryItems: grouped.length, cookies, trackers };
 }

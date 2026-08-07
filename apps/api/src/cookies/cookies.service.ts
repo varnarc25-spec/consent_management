@@ -19,10 +19,14 @@ import {
 } from './scan-comparison';
 import {
   groupScanFindingsForIngest,
+  isStorageFindingType,
   isTrackerFindingType,
+  resolveProviderDomain,
+  resolveStorageCategory,
   resolveTrackerCategory,
   shouldIncludeInInventory,
 } from './scan-findings-ingest';
+import type { ScanFindingType } from '@cmp/database';
 import { getHostname } from '../scans/scanner/crawl.util';
 
 @Injectable()
@@ -77,8 +81,30 @@ export class CookiesService {
       count: (countBySlug.get(c.slug) ?? 0) + (c.slug === 'unclassified' ? unclassified : 0),
     }));
 
+    const allItems = await this.repos.cookies.listByDomain(domain.id);
+    const cookies = allItems.filter((item) => {
+      const type =
+        typeof item.metadata === 'object' &&
+        item.metadata !== null &&
+        'findingType' in item.metadata
+          ? String((item.metadata as Record<string, unknown>).findingType)
+          : 'COOKIE';
+      return type === 'COOKIE' || isStorageFindingType(type as ScanFindingType);
+    }).length;
+    const trackers = allItems.filter((item) => {
+      const type =
+        typeof item.metadata === 'object' &&
+        item.metadata !== null &&
+        'findingType' in item.metadata
+          ? String((item.metadata as Record<string, unknown>).findingType)
+          : 'COOKIE';
+      return isTrackerFindingType(type as ScanFindingType);
+    }).length;
+
     return {
-      total: summary.reduce((sum, c) => sum + c.count, 0),
+      total: allItems.length,
+      cookies,
+      trackers,
       categories: summary,
     };
   }
@@ -194,6 +220,17 @@ export class CookiesService {
         }
       }
 
+      if (!match && isStorageFindingType(entry.findingType)) {
+        const storageCategory = resolveStorageCategory(entry.pageUrl);
+        if (storageCategory) {
+          category = storageCategory;
+          provider = resolveProviderDomain(entry) ?? undefined;
+          reviewStatus = 'AUTO_MATCHED';
+        }
+      }
+
+      const providerDomain = match?.providerDomain ?? resolveProviderDomain(entry);
+
       await this.repos.cookies.upsertDomainCookie({
         domainId: scan.domainId,
         organizationId: scan.organizationId,
@@ -201,7 +238,7 @@ export class CookiesService {
         cookieName: entry.cookieName,
         cookieDomain: entry.cookieDomain,
         provider,
-        providerDomain: match?.providerDomain,
+        providerDomain,
         description: match?.description,
         purpose: match?.purpose,
         category,
@@ -220,6 +257,7 @@ export class CookiesService {
         sourceUrl: entry.sourceUrl,
         metadata: {
           ...entry.metadata,
+          pageUrl: entry.pageUrl,
           ...(match
             ? { suggestedMatch: { definitionId: match.definitionId, confidence: match.confidence } }
             : {}),
