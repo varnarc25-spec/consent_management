@@ -53,7 +53,7 @@ build:
         - --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
         - --region=$_DEPLOY_REGION
         - --port=8080
-        - --memory=2Gi
+        - --memory=4Gi
         - --cpu=2
         - --no-cpu-throttling
         - --startup-probe=initialDelaySeconds=30,timeoutSeconds=5,periodSeconds=10,failureThreshold=18,httpGet.path=/api/v1/health,httpGet.port=8080

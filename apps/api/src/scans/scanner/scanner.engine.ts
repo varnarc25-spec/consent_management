@@ -15,7 +15,6 @@ import {
   enqueueDiscoveredLinks,
   getHostname,
   CHROMIUM_LAUNCH_ARGS,
-  isSameSite,
   matchesPathRules,
   mergeDiscoveredLinks,
   normalizeUrl,
@@ -377,48 +376,84 @@ export async function runWebsiteScan(
     throw new Error('Invalid start URL hostname');
   }
 
-  const browser: Browser = await playwright.chromium.launch({
-    headless: true,
-    args: CHROMIUM_LAUNCH_ARGS,
-  });
-
   const contextOptions =
     scan.deviceType === 'mobile'
       ? playwright.devices['Pixel 7']
       : { viewport: { width: 1366, height: 900 } };
 
+  let browser: Browser | null = null;
   let context: BrowserContext | null = null;
   let page: Page | null = null;
   let pageCrashed = false;
 
-  const createSession = async (): Promise<{ context: BrowserContext; page: Page }> => {
-    if (page && !page.isClosed()) {
-      try {
-        await page.close();
-      } catch {
-        /* ignore */
-      }
+  const closeQuietly = async (target: { close: () => Promise<void> } | null) => {
+    if (!target) return;
+    try {
+      await target.close();
+    } catch {
+      /* already closed */
     }
-    if (context) {
-      try {
-        await context.close();
-      } catch {
-        /* ignore */
-      }
+  };
+
+  const launchBrowser = async (): Promise<Browser> => {
+    await closeQuietly(page);
+    await closeQuietly(context);
+    page = null;
+    context = null;
+
+    if (browser) {
+      await closeQuietly(browser);
+      browser = null;
     }
 
-    const nextContext = await browser.newContext({
+    const next = await playwright.chromium.launch({
+      headless: true,
+      args: CHROMIUM_LAUNCH_ARGS,
+    });
+    next.on('disconnected', () => {
+      pageCrashed = true;
+      browser = null;
+      context = null;
+      page = null;
+    });
+    browser = next;
+    pageCrashed = false;
+    return next;
+  };
+
+  const createSession = async (): Promise<{ context: BrowserContext; page: Page }> => {
+    await closeQuietly(page);
+    await closeQuietly(context);
+    page = null;
+    context = null;
+
+    let active = browser;
+    if (!active || !active.isConnected()) {
+      active = await launchBrowser();
+    }
+
+    const contextConfig = {
       ...contextOptions,
       userAgent: SCANNER_USER_AGENT,
       locale: 'en-US',
       extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
-    });
+    };
 
-    // Fonts/media bloat Chromium on Cloud Run (Avada/WP themes). Keep images so
-    // tracking pixels still appear in network + DOM capture.
+    let nextContext: BrowserContext;
+    try {
+      nextContext = await active.newContext(contextConfig);
+    } catch (error) {
+      // Browser process died between isConnected() and newContext(); relaunch once.
+      if (!isTargetClosedError(error)) throw error;
+      active = await launchBrowser();
+      nextContext = await active.newContext(contextConfig);
+    }
+
+    // Drop heavy assets so Chromium is less likely to OOM on Cloud Run.
+    // Scripts/XHR still load so cookies + trackers remain detectable.
     await nextContext.route('**/*', (route) => {
       const type = route.request().resourceType();
-      if (type === 'media' || type === 'font') {
+      if (type === 'image' || type === 'media' || type === 'font') {
         return route.abort();
       }
       return route.continue();
@@ -436,12 +471,19 @@ export async function runWebsiteScan(
   };
 
   const ensureSession = async (): Promise<{ context: BrowserContext; page: Page }> => {
-    if (page && !page.isClosed() && context && !pageCrashed) {
+    if (
+      browser?.isConnected() &&
+      page &&
+      !page.isClosed() &&
+      context &&
+      !pageCrashed
+    ) {
       return { context, page };
     }
     return createSession();
   };
 
+  await launchBrowser();
   await createSession();
 
   const queue: Array<{ url: string; depth: number }> = [{ url: scan.startUrl, depth: 0 }];
@@ -565,7 +607,7 @@ export async function runWebsiteScan(
       });
     } catch (error) {
       pageStatus = 'failed';
-      if (pageCrashed || isTargetClosedError(error)) {
+      if (pageCrashed || isTargetClosedError(error) || !browser?.isConnected()) {
         errorMessage =
           'Scanner browser closed unexpectedly (often Chromium OOM or a bot challenge). Retry the scan.';
       } else {
@@ -606,9 +648,8 @@ export async function runWebsiteScan(
 
       const maxAttempts = 2;
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        const session = await ensureSession();
-
         try {
+          const session = await ensureSession();
           const result = await scanSinglePage(session.page, session.context, normalized, current);
           pageStatus = result.pageStatus;
           errorMessage = result.errorMessage;
@@ -629,10 +670,11 @@ export async function runWebsiteScan(
           pageFindings = detail.pageFindings ?? [];
           discoveredLinks = detail.discoveredLinks ?? [];
 
-          const closed =
-            pageCrashed || isTargetClosedError(error) || session.page.isClosed();
+          // Target-closed / disconnect errors mean Chromium died — relaunch the process.
+          const closed = pageCrashed || isTargetClosedError(error);
           if (attempt < maxAttempts && closed) {
-            await createSession();
+            // Full Chromium relaunch — newContext alone fails once the process is dead.
+            await launchBrowser();
             continue;
           }
           break;
@@ -672,7 +714,9 @@ export async function runWebsiteScan(
       }
     }
   } finally {
-    await browser.close();
+    await closeQuietly(page);
+    await closeQuietly(context);
+    await closeQuietly(browser);
   }
 
   const deduped = dedupeFindings(allFindings);
