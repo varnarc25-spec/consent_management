@@ -141,6 +141,10 @@ export const CHROMIUM_LAUNCH_ARGS = [
   '--disable-dev-shm-usage',
   '--disable-gpu',
   '--disable-software-rasterizer',
+  '--disable-extensions',
+  '--disable-background-networking',
+  '--mute-audio',
+  '--renderer-process-limit=2',
 ];
 
 function isLocalOrPrivateUrl(url: string) {

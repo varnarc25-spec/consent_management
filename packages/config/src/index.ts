@@ -32,10 +32,19 @@ export const APP_URLS = {
   web: process.env.WEB_URL ?? 'http://localhost:3000',
 } as const;
 
+/**
+ * Public API origin for absolute URLs (install snippet, verify links).
+ * Accepts API_URL with or without a trailing /api/vN prefix so deploy envs
+ * that set either shape do not produce /api/v1/api/v1/... paths.
+ */
+export function apiOrigin(url: string = APP_URLS.api): string {
+  return url.replace(/\/+$/, '').replace(/\/api\/v\d+$/i, '');
+}
+
 export const CMP_CONFIG = {
-  sdkPath: '/api/v1/public/cmp/sdk.js',
+  sdkPath: `/${API_CONFIG.prefix}/public/cmp/sdk.js`,
   get sdkUrl() {
-    return `${APP_URLS.api}${this.sdkPath}`;
+    return `${apiOrigin()}${this.sdkPath}`;
   },
 } as const;
 

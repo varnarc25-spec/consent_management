@@ -75,6 +75,29 @@ async function withTimeout<T>(label: string, timeoutMs: number, fn: () => Promis
   }
 }
 
+function isTargetClosedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /has been closed|Target closed|Target page, context or browser|browser has disconnected/i.test(
+    message,
+  );
+}
+
+/** Page-independent delay — unlike page.waitForTimeout, survives page/browser crashes. */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function assertPageOpen(page: Page, label: string) {
+  if (page.isClosed()) {
+    throw new Error(`Browser page closed during ${label} (Chromium crash or navigation abort)`);
+  }
+}
+
+async function settlePage(page: Page, ms: number, label = 'settle') {
+  await delay(ms);
+  await assertPageOpen(page, label);
+}
+
 async function waitForCmpSdk(page: Page, timeoutMs = 15000) {
   try {
     await page.waitForFunction(
@@ -84,8 +107,9 @@ async function waitForCmpSdk(page: Page, timeoutMs = 15000) {
       },
       { timeout: timeoutMs },
     );
-    await page.waitForTimeout(500);
-  } catch {
+    await settlePage(page, 500, 'CMP settle');
+  } catch (error) {
+    if (isTargetClosedError(error)) throw error;
     /* CMP may not be installed on this site */
   }
 }
@@ -242,11 +266,13 @@ async function navigateForScan(
   timeoutMs: number,
 ) {
   await page.goto(url, {
+    // Networkidle often never settles on analytics-heavy WP sites; load is enough.
     waitUntil: jsRendering ? 'load' : 'domcontentloaded',
     timeout: timeoutMs,
   });
+  await assertPageOpen(page, 'navigation');
   if (jsRendering) {
-    await page.waitForTimeout(1500);
+    await settlePage(page, 1500, 'post-navigation settle');
   }
 }
 
@@ -264,9 +290,10 @@ async function clickCmpAction(page: Page, action: string) {
   if (await button.count() > 0) {
     try {
       await button.click({ timeout: 3000 });
-      await page.waitForTimeout(800);
+      await settlePage(page, 800, 'CMP click settle');
       return true;
-    } catch {
+    } catch (error) {
+      if (isTargetClosedError(error)) throw error;
       /* fall through to SDK API */
     }
   }
@@ -287,11 +314,11 @@ async function clickCmpAction(page: Page, action: string) {
       return true;
     }, sdkAction);
     if (invoked) {
-      await page.waitForTimeout(1000);
+      await settlePage(page, 1000, 'CMP API settle');
       return true;
     }
-  } catch {
-    /* ignore */
+  } catch (error) {
+    if (isTargetClosedError(error)) throw error;
   }
 
   return false;
@@ -354,17 +381,68 @@ export async function runWebsiteScan(
     headless: true,
     args: CHROMIUM_LAUNCH_ARGS,
   });
+
   const contextOptions =
     scan.deviceType === 'mobile'
       ? playwright.devices['Pixel 7']
       : { viewport: { width: 1366, height: 900 } };
-  const context: BrowserContext = await browser.newContext({
-    ...contextOptions,
-    userAgent: SCANNER_USER_AGENT,
-    locale: 'en-US',
-    extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
-  });
-  const page = await context.newPage();
+
+  let context: BrowserContext | null = null;
+  let page: Page | null = null;
+  let pageCrashed = false;
+
+  const createSession = async (): Promise<{ context: BrowserContext; page: Page }> => {
+    if (page && !page.isClosed()) {
+      try {
+        await page.close();
+      } catch {
+        /* ignore */
+      }
+    }
+    if (context) {
+      try {
+        await context.close();
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const nextContext = await browser.newContext({
+      ...contextOptions,
+      userAgent: SCANNER_USER_AGENT,
+      locale: 'en-US',
+      extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
+    });
+
+    // Fonts/media bloat Chromium on Cloud Run (Avada/WP themes). Keep images so
+    // tracking pixels still appear in network + DOM capture.
+    await nextContext.route('**/*', (route) => {
+      const type = route.request().resourceType();
+      if (type === 'media' || type === 'font') {
+        return route.abort();
+      }
+      return route.continue();
+    });
+
+    const nextPage = await nextContext.newPage();
+    pageCrashed = false;
+    nextPage.on('crash', () => {
+      pageCrashed = true;
+    });
+
+    context = nextContext;
+    page = nextPage;
+    return { context: nextContext, page: nextPage };
+  };
+
+  const ensureSession = async (): Promise<{ context: BrowserContext; page: Page }> => {
+    if (page && !page.isClosed() && context && !pageCrashed) {
+      return { context, page };
+    }
+    return createSession();
+  };
+
+  await createSession();
 
   const queue: Array<{ url: string; depth: number }> = [{ url: scan.startUrl, depth: 0 }];
   const seen = new Set<string>();
@@ -386,6 +464,126 @@ export async function runWebsiteScan(
 
   const pageBudgetMs = Math.min(scan.timeoutMs * 4, 120_000);
 
+  const scanSinglePage = async (
+    activePage: Page,
+    activeContext: BrowserContext,
+    normalized: string,
+    current: { url: string; depth: number },
+  ) => {
+    const networkUrls: string[] = [];
+    const onRequest = (request: { url: () => string }) => {
+      const url = request.url();
+      if (
+        isTrackingPixelUrl(url) ||
+        url.includes('googletagmanager') ||
+        url.includes('analytics')
+      ) {
+        networkUrls.push(url);
+      }
+    };
+    activePage.on('request', onRequest);
+
+    let pageStatus = 'ok';
+    let errorMessage: string | null = null;
+    const pageFindings: ScanFindingInput[] = [];
+    let discoveredLinks: string[] = [];
+
+    try {
+      await withTimeout('page scan', pageBudgetMs, async () => {
+        await navigateForScan(activePage, normalized, scan.jsRendering, scan.timeoutMs);
+
+        const runFullConsentProbe =
+          startNormalized !== null && normalized === startNormalized;
+        if (runFullConsentProbe) {
+          await waitForCmpSdk(activePage, Math.min(scan.timeoutMs, 15000));
+        }
+
+        const pageIdPlaceholder = null;
+        const html = await activePage.content();
+        const anchorHrefs = await extractAnchorHrefs(activePage);
+        if (current.depth < scan.maxDepth) {
+          discoveredLinks = mergeDiscoveredLinks(html, anchorHrefs, normalized, siteHostname);
+        }
+
+        pageFindings.push(
+          ...(await scanPageState(
+            activePage,
+            activeContext,
+            'BEFORE_CONSENT',
+            normalized,
+            pageIdPlaceholder,
+            siteHostname,
+            networkUrls,
+          )),
+        );
+
+        if (runFullConsentProbe) {
+          const accepted = await clickCmpAction(activePage, 'accept-all');
+          if (accepted) {
+            await settlePage(activePage, 1000, 'after-accept settle');
+            pageFindings.push(
+              ...(await scanPageState(
+                activePage,
+                activeContext,
+                'AFTER_ACCEPT',
+                normalized,
+                pageIdPlaceholder,
+                siteHostname,
+                networkUrls,
+              )),
+            );
+          }
+
+          try {
+            await navigateForScan(activePage, normalized, scan.jsRendering, scan.timeoutMs);
+            await waitForCmpSdk(activePage, 5000);
+            const rejected = await clickCmpAction(activePage, 'reject-all');
+            if (rejected) {
+              await settlePage(activePage, 800, 'after-reject settle');
+              pageFindings.push(
+                ...(await scanPageState(
+                  activePage,
+                  activeContext,
+                  'AFTER_REJECT',
+                  normalized,
+                  pageIdPlaceholder,
+                  siteHostname,
+                  networkUrls,
+                )),
+              );
+            }
+          } catch (rejectError) {
+            if (isTargetClosedError(rejectError)) throw rejectError;
+            if (!errorMessage) {
+              errorMessage =
+                rejectError instanceof Error
+                  ? `Reject capture failed: ${rejectError.message}`
+                  : 'Reject capture failed';
+            }
+          }
+        }
+      });
+    } catch (error) {
+      pageStatus = 'failed';
+      if (pageCrashed || isTargetClosedError(error)) {
+        errorMessage =
+          'Scanner browser closed unexpectedly (often Chromium OOM or a bot challenge). Retry the scan.';
+      } else {
+        errorMessage = error instanceof Error ? error.message : 'Page scan failed';
+      }
+      throw Object.assign(error instanceof Error ? error : new Error(String(error)), {
+        pageStatus,
+        errorMessage,
+        pageFindings,
+        discoveredLinks,
+      });
+    } finally {
+      activePage.off('request', onRequest);
+    }
+
+    return { pageStatus, errorMessage, pageFindings, discoveredLinks };
+  };
+
   try {
     while (queue.length > 0 && pagesScanned < scan.maxPages) {
       if (options?.isCancelled?.()) {
@@ -400,113 +598,56 @@ export async function runWebsiteScan(
       if (!matchesPathRules(pathName, includePaths, excludePaths)) continue;
 
       seen.add(normalized);
-      const networkUrls: string[] = [];
-      const onRequest = (request: { url: () => string }) => {
-        const url = request.url();
-        if (
-          isTrackingPixelUrl(url) ||
-          url.includes('googletagmanager') ||
-          url.includes('analytics')
-        ) {
-          networkUrls.push(url);
-        }
-      };
-      page.on('request', onRequest);
 
       let pageStatus = 'ok';
       let errorMessage: string | null = null;
-      const pageFindings: ScanFindingInput[] = [];
+      let pageFindings: ScanFindingInput[] = [];
       let discoveredLinks: string[] = [];
 
-      try {
-        await withTimeout('page scan', pageBudgetMs, async () => {
-          await navigateForScan(page, normalized, scan.jsRendering, scan.timeoutMs);
+      const maxAttempts = 2;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const session = await ensureSession();
 
-          const runFullConsentProbe =
-            startNormalized !== null && normalized === startNormalized;
-          if (runFullConsentProbe) {
-            await waitForCmpSdk(page, Math.min(scan.timeoutMs, 15000));
+        try {
+          const result = await scanSinglePage(session.page, session.context, normalized, current);
+          pageStatus = result.pageStatus;
+          errorMessage = result.errorMessage;
+          pageFindings = result.pageFindings;
+          discoveredLinks = result.discoveredLinks;
+          break;
+        } catch (error) {
+          const detail = error as {
+            pageStatus?: string;
+            errorMessage?: string;
+            pageFindings?: ScanFindingInput[];
+            discoveredLinks?: string[];
+          };
+          pageStatus = detail.pageStatus ?? 'failed';
+          errorMessage =
+            detail.errorMessage ??
+            (error instanceof Error ? error.message : 'Page scan failed');
+          pageFindings = detail.pageFindings ?? [];
+          discoveredLinks = detail.discoveredLinks ?? [];
+
+          const closed =
+            pageCrashed || isTargetClosedError(error) || session.page.isClosed();
+          if (attempt < maxAttempts && closed) {
+            await createSession();
+            continue;
           }
-
-          const pageIdPlaceholder = null;
-          const html = await page.content();
-          const anchorHrefs = await extractAnchorHrefs(page);
-          if (current.depth < scan.maxDepth) {
-            discoveredLinks = mergeDiscoveredLinks(html, anchorHrefs, normalized, siteHostname);
-          }
-
-          pageFindings.push(
-            ...(await scanPageState(
-              page,
-              context,
-              'BEFORE_CONSENT',
-              normalized,
-              pageIdPlaceholder,
-              siteHostname,
-              networkUrls,
-            )),
-          );
-
-          if (runFullConsentProbe) {
-            const accepted = await clickCmpAction(page, 'accept-all');
-            if (accepted) {
-              await page.waitForTimeout(1000);
-              pageFindings.push(
-                ...(await scanPageState(
-                  page,
-                  context,
-                  'AFTER_ACCEPT',
-                  normalized,
-                  pageIdPlaceholder,
-                  siteHostname,
-                  networkUrls,
-                )),
-              );
-            }
-
-            try {
-              await navigateForScan(page, normalized, scan.jsRendering, scan.timeoutMs);
-              await waitForCmpSdk(page, 5000);
-              const rejected = await clickCmpAction(page, 'reject-all');
-              if (rejected) {
-                await page.waitForTimeout(800);
-                pageFindings.push(
-                  ...(await scanPageState(
-                    page,
-                    context,
-                    'AFTER_REJECT',
-                    normalized,
-                    pageIdPlaceholder,
-                    siteHostname,
-                    networkUrls,
-                  )),
-                );
-              }
-            } catch (rejectError) {
-              if (!errorMessage) {
-                errorMessage =
-                  rejectError instanceof Error
-                    ? `Reject capture failed: ${rejectError.message}`
-                    : 'Reject capture failed';
-              }
-            }
-          }
-        });
-      } catch (error) {
-        pageStatus = 'failed';
-        errorMessage = error instanceof Error ? error.message : 'Page scan failed';
-      } finally {
-        if (discoveredLinks.length > 0) {
-          enqueueDiscoveredLinks(
-            discoveredLinks,
-            current.depth + 1,
-            seen,
-            queue,
-            includePaths,
-            excludePaths,
-          );
+          break;
         }
-        page.off('request', onRequest);
+      }
+
+      if (discoveredLinks.length > 0) {
+        enqueueDiscoveredLinks(
+          discoveredLinks,
+          current.depth + 1,
+          seen,
+          queue,
+          includePaths,
+          excludePaths,
+        );
       }
 
       pagesScanned += 1;

@@ -54,7 +54,7 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
-  _API_URL: https://consent-management-api-414895350436.us-central1.run.app/api/v1
+  _API_URL: https://consent-management-api-414895350436.us-central1.run.app
   _ADMIN_URL: https://consent-management-admin-414895350436.us-central1.run.app
   _WEB_URL: https://consent-management-web-414895350436.us-central1.run.app
   _AUTH0_DOMAIN: dev-varnarc.us.auth0.com
