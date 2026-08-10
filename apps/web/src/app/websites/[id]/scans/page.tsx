@@ -116,7 +116,7 @@ function WebsiteScansContent({ domain }: { domain: Domain }) {
         startUrl: `https://${domain.hostname}/`,
         maxPages: 1,
         maxDepth: 0,
-        timeoutMs: 45000,
+        timeoutMs: 20000,
         jsRendering: true,
         deviceType: 'desktop',
       }),

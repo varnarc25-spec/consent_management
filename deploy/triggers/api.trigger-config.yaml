@@ -56,6 +56,7 @@ build:
         - --memory=4Gi
         - --cpu=2
         - --no-cpu-throttling
+        - --timeout=3600
         - --startup-probe=initialDelaySeconds=30,timeoutSeconds=5,periodSeconds=10,failureThreshold=18,httpGet.path=/api/v1/health,httpGet.port=8080
         - --set-env-vars=NODE_ENV=production,API_PREFIX=api/v1,API_URL=https://consent-management-api-414895350436.us-central1.run.app,ADMIN_URL=https://consent-management-admin-414895350436.us-central1.run.app,WEB_URL=https://consent-management-web-414895350436.us-central1.run.app,EMAIL_VERIFICATION_ENABLED=false,DOMAIN_AUTO_VERIFY=false,AUTH0_DOMAIN=dev-varnarc.us.auth0.com,AUTH0_AUDIENCE=https://api.consent-management.varnarc.com,AUTH0_ISSUER_URL=https://dev-varnarc.us.auth0.com/
         - --set-secrets=CM_DATABASE_URL=CM_DATABASE_URL:latest,JWT_ACCESS_SECRET=JWT_ACCESS_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest

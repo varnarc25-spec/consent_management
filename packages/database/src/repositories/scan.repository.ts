@@ -61,39 +61,54 @@ export class ScanRepository {
   }
 
   async expireStaleRunningScans(domainId?: string, maxAgeMs = 30 * 60 * 1000) {
-    const stalledCutoff = new Date(Date.now() - 10 * 60 * 1000);
-    const zeroProgressCutoff = new Date(Date.now() - 10 * 60 * 1000);
+    // Fail hung scans quickly: homepage Chromium hangs previously sat at 0% for 10 minutes.
+    const stalledCutoff = new Date(Date.now() - 3 * 60 * 1000);
+    const zeroProgressCutoff = new Date(Date.now() - 3 * 60 * 1000);
     const cutoff = new Date(Date.now() - maxAgeMs);
     const domainFilter = domainId ? { domainId } : {};
 
-    await this.prisma.domainScan.updateMany({
+    const stalled = await this.prisma.domainScan.findMany({
       where: {
         status: 'RUNNING',
         updatedAt: { lt: stalledCutoff },
         ...domainFilter,
       },
-      data: {
-        status: 'FAILED',
-        errorMessage:
-          'Scan stalled with no progress for 10 minutes. Stop the scan and start a new one.',
-        completedAt: new Date(),
-      },
+      select: { id: true },
     });
 
-    await this.prisma.domainScan.updateMany({
+    if (stalled.length > 0) {
+      await this.prisma.domainScan.updateMany({
+        where: { id: { in: stalled.map((s) => s.id) } },
+        data: {
+          status: 'FAILED',
+          errorMessage:
+            'Scan stalled with no progress for 3 minutes. Stop the scan and start a new one.',
+          completedAt: new Date(),
+        },
+      });
+    }
+
+    const zeroProgress = await this.prisma.domainScan.findMany({
       where: {
         status: 'RUNNING',
         pagesScanned: 0,
         startedAt: { lt: zeroProgressCutoff },
         ...domainFilter,
       },
-      data: {
-        status: 'FAILED',
-        errorMessage:
-          'Scan timed out with no pages crawled (server may have restarted). Start a new scan.',
-        completedAt: new Date(),
-      },
+      select: { id: true },
     });
+
+    if (zeroProgress.length > 0) {
+      await this.prisma.domainScan.updateMany({
+        where: { id: { in: zeroProgress.map((s) => s.id) } },
+        data: {
+          status: 'FAILED',
+          errorMessage:
+            'Scan timed out with no pages crawled (browser may be hung). Start a new scan.',
+          completedAt: new Date(),
+        },
+      });
+    }
 
     const stale = await this.prisma.domainScan.findMany({
       where: {
@@ -120,7 +135,7 @@ export class ScanRepository {
       });
     }
 
-    return stale.length;
+    return [...new Set([...stalled, ...zeroProgress, ...stale].map((s) => s.id))];
   }
 
   create(input: CreateScanInput) {

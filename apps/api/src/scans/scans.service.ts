@@ -87,7 +87,11 @@ export class ScansService {
 
   async list(user: CurrentUser, domainId: string): Promise<ScanSummaryResponse[]> {
     const domain = await this.getDomainForUser(user, domainId);
-    await this.repos.scans.expireStaleRunningScans(domain.id, 30 * 60 * 1000);
+    const expiredIds = await this.repos.scans.expireStaleRunningScans(domain.id, 30 * 60 * 1000);
+    for (const id of expiredIds) {
+      this.cancelRequests.add(id);
+      this.activeScans.delete(id);
+    }
     const scans = await this.repos.scans.listByDomain(domain.id);
     const summaries = await Promise.all(
       scans.map(async (scan) => {
@@ -428,8 +432,32 @@ export class ScansService {
             });
           }
         },
-        { isCancelled: () => this.cancelRequests.has(scanId) },
+        {
+          isCancelled: () => this.cancelRequests.has(scanId),
+          onHeartbeat: async () => {
+            // Touch updatedAt so stall detection does not kill a live Chromium session.
+            const live = await this.repos.scans.findById(scanId);
+            if (live?.status === 'RUNNING') {
+              await this.repos.scans.updateStatus(scanId, 'RUNNING', {
+                pagesScanned: live.pagesScanned,
+                cookiesFound: live.cookiesFound,
+                trackersFound: live.trackersFound,
+              });
+            }
+          },
+        },
       );
+
+      const latest = await this.repos.scans.findById(scanId);
+      if (
+        !latest ||
+        latest.status === 'CANCELLED' ||
+        latest.status === 'FAILED' ||
+        this.cancelRequests.has(scanId)
+      ) {
+        // Stall expiry or user cancel already finalized this scan — do not overwrite.
+        return;
+      }
 
       const completedAt = new Date();
       const durationMs = completedAt.getTime() - startedAt.getTime();

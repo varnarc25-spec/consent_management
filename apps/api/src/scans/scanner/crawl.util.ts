@@ -143,8 +143,10 @@ export const CHROMIUM_LAUNCH_ARGS = [
   '--disable-software-rasterizer',
   '--disable-extensions',
   '--disable-background-networking',
+  '--disable-background-timer-throttling',
+  '--disable-renderer-backgrounding',
   '--mute-audio',
-  '--renderer-process-limit=2',
+  '--renderer-process-limit=1',
 ];
 
 function isLocalOrPrivateUrl(url: string) {

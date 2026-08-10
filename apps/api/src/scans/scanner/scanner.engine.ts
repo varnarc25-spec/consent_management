@@ -57,6 +57,8 @@ export class ScanCancelledError extends Error {
 
 export interface RunWebsiteScanOptions {
   isCancelled?: () => boolean;
+  /** Called periodically so callers can refresh scan.updatedAt / detect liveness. */
+  onHeartbeat?: () => Promise<void> | void;
 }
 
 async function withTimeout<T>(label: string, timeoutMs: number, fn: () => Promise<T>): Promise<T> {
@@ -263,15 +265,17 @@ async function navigateForScan(
   url: string,
   jsRendering: boolean,
   timeoutMs: number,
+  settleMs = 2000,
 ) {
+  // domcontentloaded is far more reliable than "load" on WP Rocket / Avada sites
+  // where deferred scripts can keep "load" pending until Chromium wedges.
   await page.goto(url, {
-    // Networkidle often never settles on analytics-heavy WP sites; load is enough.
-    waitUntil: jsRendering ? 'load' : 'domcontentloaded',
+    waitUntil: 'domcontentloaded',
     timeout: timeoutMs,
   });
   await assertPageOpen(page, 'navigation');
   if (jsRendering) {
-    await settlePage(page, 1500, 'post-navigation settle');
+    await settlePage(page, settleMs, 'post-navigation settle');
   }
 }
 
@@ -283,13 +287,13 @@ async function extractAnchorHrefs(page: Page): Promise<string[]> {
   );
 }
 
-async function clickCmpAction(page: Page, action: string) {
+async function clickCmpAction(page: Page, action: string, settleMs = 800) {
   const selector = `[data-cmp-action="${action}"]`;
   const button = page.locator(selector).first();
   if (await button.count() > 0) {
     try {
-      await button.click({ timeout: 3000 });
-      await settlePage(page, 800, 'CMP click settle');
+      await button.click({ timeout: 2000 });
+      await settlePage(page, settleMs, 'CMP click settle');
       return true;
     } catch (error) {
       if (isTargetClosedError(error)) throw error;
@@ -313,7 +317,7 @@ async function clickCmpAction(page: Page, action: string) {
       return true;
     }, sdkAction);
     if (invoked) {
-      await settlePage(page, 1000, 'CMP API settle');
+      await settlePage(page, settleMs, 'CMP API settle');
       return true;
     }
   } catch (error) {
@@ -331,6 +335,7 @@ async function scanPageState(
   pageId: string | null,
   siteHostname: string,
   networkUrls: string[],
+  options?: { includeFrames?: boolean },
 ): Promise<ScanFindingInput[]> {
   const cookies = await context.cookies();
   const cookieFindings = cookiesToFindings(
@@ -352,6 +357,10 @@ async function scanPageState(
 
   const snapshot = await captureDomSnapshot(page, networkUrls);
   const domFindings = domSnapshotToFindings(snapshot, consentState, pageUrl, pageId, siteHostname);
+  if (options?.includeFrames === false) {
+    return [...cookieFindings, ...domFindings];
+  }
+
   const frameSnapshots = await captureFrameStorageSnapshots(page);
   const frameFindings = frameStorageToFindings(
     frameSnapshots,
@@ -406,10 +415,12 @@ export async function runWebsiteScan(
       browser = null;
     }
 
-    const next = await playwright.chromium.launch({
-      headless: true,
-      args: CHROMIUM_LAUNCH_ARGS,
-    });
+    const next = await withTimeout('chromium launch', 30_000, () =>
+      playwright.chromium.launch({
+        headless: true,
+        args: CHROMIUM_LAUNCH_ARGS,
+      }),
+    );
     next.on('disconnected', () => {
       pageCrashed = true;
       browser = null;
@@ -483,8 +494,10 @@ export async function runWebsiteScan(
     return createSession();
   };
 
-  await launchBrowser();
-  await createSession();
+  await withTimeout('browser session start', 45_000, async () => {
+    await launchBrowser();
+    await createSession();
+  });
 
   const queue: Array<{ url: string; depth: number }> = [{ url: scan.startUrl, depth: 0 }];
   const seen = new Set<string>();
@@ -492,7 +505,12 @@ export async function runWebsiteScan(
   const pageRecords: ScanRunResult['pageRecords'] = [];
   let pagesScanned = 0;
 
+  // Homepage inventory only needs before-consent + one accept pass.
+  // Full-site crawls still run accept/reject probes on the start URL.
   const homepageOnly = scan.maxDepth === 0;
+  const navSettleMs = homepageOnly ? 800 : 2000;
+  const cmpWaitMs = homepageOnly ? 4000 : Math.min(scan.timeoutMs, 8000);
+  const cmpSettleMs = homepageOnly ? 400 : 800;
 
   if (!homepageOnly) {
     const homeLinks = await discoverLinksFromFetchPage(scan.startUrl, siteHostname);
@@ -504,7 +522,13 @@ export async function runWebsiteScan(
 
   const startNormalized = normalizeUrl(scan.startUrl);
 
-  const pageBudgetMs = Math.min(scan.timeoutMs * 4, 120_000);
+  // Homepage consent probe is single-pass; keep budgets tight.
+  const pageBudgetMs = homepageOnly
+    ? Math.min(Math.max(scan.timeoutMs, 30_000), 45_000)
+    : Math.min(scan.timeoutMs * 4, 120_000);
+  const overallBudgetMs = homepageOnly
+    ? Math.min(Math.max(scan.timeoutMs * 2, 60_000), 90_000)
+    : Math.min(Math.max(scan.timeoutMs * scan.maxPages, 180_000), 600_000);
 
   const scanSinglePage = async (
     activePage: Page,
@@ -532,18 +556,25 @@ export async function runWebsiteScan(
 
     try {
       await withTimeout('page scan', pageBudgetMs, async () => {
-        await navigateForScan(activePage, normalized, scan.jsRendering, scan.timeoutMs);
+        await navigateForScan(
+          activePage,
+          normalized,
+          scan.jsRendering,
+          homepageOnly ? Math.min(scan.timeoutMs, 25_000) : scan.timeoutMs,
+          navSettleMs,
+        );
 
-        const runFullConsentProbe =
+        const runConsentProbe =
           startNormalized !== null && normalized === startNormalized;
-        if (runFullConsentProbe) {
-          await waitForCmpSdk(activePage, Math.min(scan.timeoutMs, 15000));
+        if (runConsentProbe) {
+          await waitForCmpSdk(activePage, cmpWaitMs);
         }
 
         const pageIdPlaceholder = null;
-        const html = await activePage.content();
-        const anchorHrefs = await extractAnchorHrefs(activePage);
+        // Homepage scans don't crawl further — skip expensive link extraction.
         if (current.depth < scan.maxDepth) {
+          const html = await activePage.content();
+          const anchorHrefs = await extractAnchorHrefs(activePage);
           discoveredLinks = mergeDiscoveredLinks(html, anchorHrefs, normalized, siteHostname);
         }
 
@@ -556,13 +587,15 @@ export async function runWebsiteScan(
             pageIdPlaceholder,
             siteHostname,
             networkUrls,
+            { includeFrames: !homepageOnly },
           )),
         );
 
-        if (runFullConsentProbe) {
-          const accepted = await clickCmpAction(activePage, 'accept-all');
+        if (runConsentProbe) {
+          // Fast homepage path: one accept pass only (no second full reload + reject).
+          const accepted = await clickCmpAction(activePage, 'accept-all', cmpSettleMs);
           if (accepted) {
-            await settlePage(activePage, 1000, 'after-accept settle');
+            await settlePage(activePage, cmpSettleMs, 'after-accept settle');
             pageFindings.push(
               ...(await scanPageState(
                 activePage,
@@ -572,35 +605,44 @@ export async function runWebsiteScan(
                 pageIdPlaceholder,
                 siteHostname,
                 networkUrls,
+                { includeFrames: !homepageOnly },
               )),
             );
           }
 
-          try {
-            await navigateForScan(activePage, normalized, scan.jsRendering, scan.timeoutMs);
-            await waitForCmpSdk(activePage, 5000);
-            const rejected = await clickCmpAction(activePage, 'reject-all');
-            if (rejected) {
-              await settlePage(activePage, 800, 'after-reject settle');
-              pageFindings.push(
-                ...(await scanPageState(
-                  activePage,
-                  activeContext,
-                  'AFTER_REJECT',
-                  normalized,
-                  pageIdPlaceholder,
-                  siteHostname,
-                  networkUrls,
-                )),
+          if (!homepageOnly) {
+            try {
+              await navigateForScan(
+                activePage,
+                normalized,
+                scan.jsRendering,
+                scan.timeoutMs,
+                navSettleMs,
               );
-            }
-          } catch (rejectError) {
-            if (isTargetClosedError(rejectError)) throw rejectError;
-            if (!errorMessage) {
-              errorMessage =
-                rejectError instanceof Error
-                  ? `Reject capture failed: ${rejectError.message}`
-                  : 'Reject capture failed';
+              await waitForCmpSdk(activePage, 4000);
+              const rejected = await clickCmpAction(activePage, 'reject-all', cmpSettleMs);
+              if (rejected) {
+                await settlePage(activePage, cmpSettleMs, 'after-reject settle');
+                pageFindings.push(
+                  ...(await scanPageState(
+                    activePage,
+                    activeContext,
+                    'AFTER_REJECT',
+                    normalized,
+                    pageIdPlaceholder,
+                    siteHostname,
+                    networkUrls,
+                  )),
+                );
+              }
+            } catch (rejectError) {
+              if (isTargetClosedError(rejectError)) throw rejectError;
+              if (!errorMessage) {
+                errorMessage =
+                  rejectError instanceof Error
+                    ? `Reject capture failed: ${rejectError.message}`
+                    : 'Reject capture failed';
+              }
             }
           }
         }
@@ -626,94 +668,104 @@ export async function runWebsiteScan(
     return { pageStatus, errorMessage, pageFindings, discoveredLinks };
   };
 
+  let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+  if (options?.onHeartbeat) {
+    heartbeatTimer = setInterval(() => {
+      void Promise.resolve(options.onHeartbeat?.()).catch(() => undefined);
+    }, 15_000);
+  }
+
   try {
-    while (queue.length > 0 && pagesScanned < scan.maxPages) {
-      if (options?.isCancelled?.()) {
-        throw new ScanCancelledError();
-      }
+    await withTimeout('website scan', overallBudgetMs, async () => {
+      while (queue.length > 0 && pagesScanned < scan.maxPages) {
+        if (options?.isCancelled?.()) {
+          throw new ScanCancelledError();
+        }
 
-      const current = queue.shift()!;
-      const normalized = normalizeUrl(current.url);
-      if (!normalized || seen.has(normalized)) continue;
+        const current = queue.shift()!;
+        const normalized = normalizeUrl(current.url);
+        if (!normalized || seen.has(normalized)) continue;
 
-      const pathName = new URL(normalized).pathname;
-      if (!matchesPathRules(pathName, includePaths, excludePaths)) continue;
+        const pathName = new URL(normalized).pathname;
+        if (!matchesPathRules(pathName, includePaths, excludePaths)) continue;
 
-      seen.add(normalized);
+        seen.add(normalized);
 
-      let pageStatus = 'ok';
-      let errorMessage: string | null = null;
-      let pageFindings: ScanFindingInput[] = [];
-      let discoveredLinks: string[] = [];
+        let pageStatus = 'ok';
+        let errorMessage: string | null = null;
+        let pageFindings: ScanFindingInput[] = [];
+        let discoveredLinks: string[] = [];
 
-      const maxAttempts = 2;
-      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        try {
-          const session = await ensureSession();
-          const result = await scanSinglePage(session.page, session.context, normalized, current);
-          pageStatus = result.pageStatus;
-          errorMessage = result.errorMessage;
-          pageFindings = result.pageFindings;
-          discoveredLinks = result.discoveredLinks;
-          break;
-        } catch (error) {
-          const detail = error as {
-            pageStatus?: string;
-            errorMessage?: string;
-            pageFindings?: ScanFindingInput[];
-            discoveredLinks?: string[];
-          };
-          pageStatus = detail.pageStatus ?? 'failed';
-          errorMessage =
-            detail.errorMessage ??
-            (error instanceof Error ? error.message : 'Page scan failed');
-          pageFindings = detail.pageFindings ?? [];
-          discoveredLinks = detail.discoveredLinks ?? [];
+        const maxAttempts = 2;
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          try {
+            const session = await ensureSession();
+            const result = await scanSinglePage(session.page, session.context, normalized, current);
+            pageStatus = result.pageStatus;
+            errorMessage = result.errorMessage;
+            pageFindings = result.pageFindings;
+            discoveredLinks = result.discoveredLinks;
+            break;
+          } catch (error) {
+            const detail = error as {
+              pageStatus?: string;
+              errorMessage?: string;
+              pageFindings?: ScanFindingInput[];
+              discoveredLinks?: string[];
+            };
+            pageStatus = detail.pageStatus ?? 'failed';
+            errorMessage =
+              detail.errorMessage ??
+              (error instanceof Error ? error.message : 'Page scan failed');
+            pageFindings = detail.pageFindings ?? [];
+            discoveredLinks = detail.discoveredLinks ?? [];
 
-          // Target-closed / disconnect errors mean Chromium died — relaunch the process.
-          const closed = pageCrashed || isTargetClosedError(error);
-          if (attempt < maxAttempts && closed) {
-            // Full Chromium relaunch — newContext alone fails once the process is dead.
-            await launchBrowser();
-            continue;
+            // Target-closed / disconnect errors mean Chromium died — relaunch the process.
+            const closed = pageCrashed || isTargetClosedError(error);
+            if (attempt < maxAttempts && closed) {
+              // Full Chromium relaunch — newContext alone fails once the process is dead.
+              await launchBrowser();
+              continue;
+            }
+            break;
           }
-          break;
+        }
+
+        if (discoveredLinks.length > 0) {
+          enqueueDiscoveredLinks(
+            discoveredLinks,
+            current.depth + 1,
+            seen,
+            queue,
+            includePaths,
+            excludePaths,
+          );
+        }
+
+        pagesScanned += 1;
+        const pageRecord = {
+          url: normalized,
+          canonicalUrl: normalized,
+          status: pageStatus,
+          depth: current.depth,
+          errorMessage,
+          findings: dedupeFindings(pageFindings),
+        };
+        pageRecords.push(pageRecord);
+        allFindings.push(...pageFindings);
+
+        if (onPageScanned) {
+          const progressStats = countFindingStats(dedupeFindings(allFindings));
+          await onPageScanned(pageRecord, {
+            pagesScanned,
+            cookiesFound: progressStats.cookies,
+            trackersFound: progressStats.trackers,
+          });
         }
       }
-
-      if (discoveredLinks.length > 0) {
-        enqueueDiscoveredLinks(
-          discoveredLinks,
-          current.depth + 1,
-          seen,
-          queue,
-          includePaths,
-          excludePaths,
-        );
-      }
-
-      pagesScanned += 1;
-      const pageRecord = {
-        url: normalized,
-        canonicalUrl: normalized,
-        status: pageStatus,
-        depth: current.depth,
-        errorMessage,
-        findings: dedupeFindings(pageFindings),
-      };
-      pageRecords.push(pageRecord);
-      allFindings.push(...pageFindings);
-
-      if (onPageScanned) {
-        const progressStats = countFindingStats(dedupeFindings(allFindings));
-        await onPageScanned(pageRecord, {
-          pagesScanned,
-          cookiesFound: progressStats.cookies,
-          trackersFound: progressStats.trackers,
-        });
-      }
-    }
+    });
   } finally {
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
     await closeQuietly(page);
     await closeQuietly(context);
     await closeQuietly(browser);
