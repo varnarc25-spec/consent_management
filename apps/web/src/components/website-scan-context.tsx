@@ -8,28 +8,44 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { useRunningScanPoll } from '@/hooks/use-running-scan-poll';
+import { DOMAIN_SCAN_POLL_MS, useRunningScanPoll } from '@/hooks/use-running-scan-poll';
 import { apiFetch } from '@/lib/api';
 
-interface ScanSummary {
+export interface WebsiteScanSummary {
   id: string;
   status: string;
-  pagesScanned: number;
+  startUrl?: string;
   maxPages?: number;
+  pagesScanned: number;
+  progressPercent?: number;
+  cookiesFound?: number;
+  trackersFound?: number;
+  errorMessage?: string | null;
+  progressMessage?: string | null;
+  durationMs?: number | null;
   completedAt: string | null;
   createdAt: string;
 }
 
 interface WebsiteScanContextValue {
+  scans: WebsiteScanSummary[];
   hasRunningScan: boolean;
-  runningScan: ScanSummary | undefined;
+  runningScan: WebsiteScanSummary | undefined;
+  /** Increments when a running scan finishes (completed/failed/cancelled). */
+  scanEpoch: number;
   flashMessage: string;
+  pollIntervalMs: number;
+  refreshScans: () => Promise<void>;
   notifyScanStarted: () => void;
   clearFlash: () => void;
 }
 
 const WebsiteScanContext = createContext<WebsiteScanContextValue | null>(null);
 
+/**
+ * Single owner of GET /domains/:id/scans polling while a scan is RUNNING.
+ * Child pages must read from this context — do not add more useRunningScanPoll hooks.
+ */
 export function WebsiteScanProvider({
   domainId,
   children,
@@ -37,22 +53,30 @@ export function WebsiteScanProvider({
   domainId: string;
   children: React.ReactNode;
 }) {
-  const [scans, setScans] = useState<ScanSummary[]>([]);
+  const [scans, setScans] = useState<WebsiteScanSummary[]>([]);
   const [flashMessage, setFlashMessage] = useState('');
+  const [scanEpoch, setScanEpoch] = useState(0);
 
-  const loadScans = useCallback(async () => {
-    const r = await apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`, { silent: true });
+  const refreshScans = useCallback(async () => {
+    const r = await apiFetch<WebsiteScanSummary[]>(`/domains/${domainId}/scans`, {
+      silent: true,
+    });
     if (r.data) setScans(r.data);
   }, [domainId]);
 
   useEffect(() => {
-    loadScans();
-  }, [loadScans]);
+    void refreshScans();
+  }, [refreshScans]);
 
   const hasRunningScan = scans.some((s) => s.status === 'RUNNING');
   const runningScan = scans.find((s) => s.status === 'RUNNING');
 
-  useRunningScanPoll(hasRunningScan, loadScans, loadScans);
+  const onScanFinished = useCallback(async () => {
+    await refreshScans();
+    setScanEpoch((n) => n + 1);
+  }, [refreshScans]);
+
+  useRunningScanPoll(hasRunningScan, refreshScans, onScanFinished);
 
   useEffect(() => {
     if (!flashMessage) return;
@@ -62,20 +86,33 @@ export function WebsiteScanProvider({
 
   const notifyScanStarted = useCallback(() => {
     setFlashMessage('Scan started');
-    void loadScans();
-  }, [loadScans]);
+    void refreshScans();
+  }, [refreshScans]);
 
   const clearFlash = useCallback(() => setFlashMessage(''), []);
 
   const value = useMemo(
     () => ({
+      scans,
       hasRunningScan,
       runningScan,
+      scanEpoch,
       flashMessage,
+      pollIntervalMs: DOMAIN_SCAN_POLL_MS,
+      refreshScans,
       notifyScanStarted,
       clearFlash,
     }),
-    [hasRunningScan, runningScan, flashMessage, notifyScanStarted, clearFlash],
+    [
+      scans,
+      hasRunningScan,
+      runningScan,
+      scanEpoch,
+      flashMessage,
+      refreshScans,
+      notifyScanStarted,
+      clearFlash,
+    ],
   );
 
   return (
@@ -102,6 +139,7 @@ export function WebsiteScanStatus() {
           {runningScan?.maxPages
             ? ` (${runningScan.pagesScanned ?? 0}/${runningScan.maxPages} pages)`
             : ''}
+          {runningScan?.progressMessage ? ` — ${runningScan.progressMessage}` : ''}
         </p>
       )}
       {flashMessage && <p className="website-scan-status-line success">{flashMessage}</p>}

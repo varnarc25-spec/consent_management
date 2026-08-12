@@ -1,19 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRunningScanPoll } from '@/hooks/use-running-scan-poll';
+import { useMemo } from 'react';
 import { useWebsiteScan } from '@/components/website-scan-context';
-import { apiFetch, getApiUrl } from '@/lib/api';
-
-interface ScanSummary {
-  id: string;
-  status: string;
-  pagesScanned: number;
-  maxPages?: number;
-  errorMessage?: string | null;
-  completedAt: string | null;
-  createdAt: string;
-}
+import { getApiUrl } from '@/lib/api';
 
 function formatScanDate(iso: string) {
   return new Date(iso).toLocaleString('en-GB', {
@@ -40,33 +29,8 @@ export function WebsiteDomainOverview({
   nextScanAt,
 }: WebsiteDomainOverviewProps) {
   const websiteScan = useWebsiteScan();
-  const [scans, setScans] = useState<ScanSummary[]>([]);
-
-  function loadScans(silent = true) {
-    return apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`, { silent }).then((r) => {
-      if (r.data) setScans(r.data);
-      return r.data;
-    });
-  }
-
-  useEffect(() => {
-    loadScans(true);
-  }, [domainId]);
-
-  useEffect(() => {
-    if (websiteScan?.hasRunningScan) {
-      void loadScans(true);
-    }
-  }, [websiteScan?.hasRunningScan, domainId]);
-
-  const hasRunningScan =
-    scans.some((s) => s.status === 'RUNNING') || Boolean(websiteScan?.hasRunningScan);
-
-  const pollScanProgress = useCallback(async () => {
-    await loadScans(true);
-  }, [domainId]);
-
-  useRunningScanPoll(hasRunningScan, pollScanProgress, pollScanProgress);
+  const scans = websiteScan?.scans ?? [];
+  const hasRunningScan = Boolean(websiteScan?.hasRunningScan);
 
   const lastCompletedScan = useMemo(
     () => scans.find((s) => s.status === 'COMPLETED'),

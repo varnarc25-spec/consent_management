@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import type { Repositories } from '@cmp/database';
 import type { CurrentUser } from '@cmp/types';
@@ -16,6 +17,7 @@ import type { AuditMeta } from '../organizations/organizations.service';
 import { CookiesService } from '../cookies/cookies.service';
 import { WebhookDeliveryService } from '../webhooks/webhook-delivery.service';
 import { runWebsiteScan, ScanCancelledError } from './scanner/scanner.engine';
+import { warmSharedBrowser } from './scanner/browser-pool';
 import { buildStartUrl, getHostname } from './scanner/crawl.util';
 import { countInventoryFromFindings } from '../cookies/scan-findings-ingest';
 import { nextScanAtFromFrequency } from '../domains/domains.service';
@@ -32,6 +34,7 @@ export interface ScanSummaryResponse {
   cookiesFound: number;
   trackersFound: number;
   errorMessage: string | null;
+  progressMessage?: string | null;
   startedAt: string | null;
   completedAt: string | null;
   durationMs: number | null;
@@ -73,7 +76,7 @@ export interface ScanDetailResponse extends ScanSummaryResponse {
 }
 
 @Injectable()
-export class ScansService {
+export class ScansService implements OnModuleInit {
   private readonly logger = new Logger(ScansService.name);
   private readonly activeScans = new Set<string>();
   private readonly cancelRequests = new Set<string>();
@@ -84,6 +87,15 @@ export class ScansService {
     private readonly cookiesService: CookiesService,
     private readonly webhookDelivery: WebhookDeliveryService,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    // Warm Chromium at boot so the first scan does not pay the cold-launch tax on Cloud Run.
+    void warmSharedBrowser().catch((err) => {
+      this.logger.warn(
+        `Chromium warm-up deferred: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    });
+  }
 
   async list(user: CurrentUser, domainId: string): Promise<ScanSummaryResponse[]> {
     const domain = await this.getDomainForUser(user, domainId);
@@ -303,6 +315,7 @@ export class ScansService {
       cookiesFound: live.cookiesFound,
       trackersFound: live.trackersFound,
       errorMessage: 'Cancelled by user',
+      progressMessage: null,
     });
 
     this.activeScans.delete(scanId);
@@ -392,61 +405,80 @@ export class ScansService {
         return;
       }
 
-      await this.repos.scans.updateStatus(scanId, 'RUNNING', { startedAt });
+      await this.repos.scans.updateStatus(scanId, 'RUNNING', {
+        startedAt,
+        progressMessage: 'Starting scan worker…',
+      });
 
-      const result = await runWebsiteScan(
-        scan,
-        async (pageRecord, progress) => {
-          try {
-            const page = await this.repos.scans.createPage(scanId, {
-              url: pageRecord.url,
-              canonicalUrl: pageRecord.canonicalUrl,
-              status: pageRecord.status,
-              depth: pageRecord.depth,
-              errorMessage: pageRecord.errorMessage,
-            });
-
-            const findings = pageRecord.findings.map((finding) => ({
-              ...finding,
-              pageId: page.id,
-            }));
-            if (findings.length > 0) {
-              await this.repos.scans.createFindings(scanId, findings);
-            }
-
+      // Heartbeat from the moment the scan is RUNNING — not after Chromium launches —
+      // so a hung browser launch is distinguishable from a dead Cloud Run worker.
+      const heartbeat = setInterval(() => {
+        void this.repos.scans
+          .findById(scanId)
+          .then(async (live) => {
+            if (live?.status !== 'RUNNING') return;
             await this.repos.scans.updateStatus(scanId, 'RUNNING', {
-              pagesScanned: progress.pagesScanned,
-              cookiesFound: progress.cookiesFound,
-              trackersFound: progress.trackersFound,
+              pagesScanned: live.pagesScanned,
+              cookiesFound: live.cookiesFound,
+              trackersFound: live.trackersFound,
+              progressMessage: live.progressMessage,
             });
-          } catch (pageError) {
-            this.logger.error(
-              `Scan ${scanId} page persist failed: ${
-                pageError instanceof Error ? pageError.message : String(pageError)
-              }`,
-            );
-            await this.repos.scans.updateStatus(scanId, 'RUNNING', {
-              pagesScanned: progress.pagesScanned,
-              cookiesFound: progress.cookiesFound,
-              trackersFound: progress.trackersFound,
-            });
-          }
-        },
-        {
-          isCancelled: () => this.cancelRequests.has(scanId),
-          onHeartbeat: async () => {
-            // Touch updatedAt so stall detection does not kill a live Chromium session.
-            const live = await this.repos.scans.findById(scanId);
-            if (live?.status === 'RUNNING') {
+          })
+          .catch(() => undefined);
+      }, 15_000);
+
+      let result;
+      try {
+        result = await runWebsiteScan(
+          scan,
+          async (pageRecord, progress) => {
+            try {
+              const page = await this.repos.scans.createPage(scanId, {
+                url: pageRecord.url,
+                canonicalUrl: pageRecord.canonicalUrl,
+                status: pageRecord.status,
+                depth: pageRecord.depth,
+                errorMessage: pageRecord.errorMessage,
+              });
+
+              const findings = pageRecord.findings.map((finding) => ({
+                ...finding,
+                pageId: page.id,
+              }));
+              if (findings.length > 0) {
+                await this.repos.scans.createFindings(scanId, findings);
+              }
+
               await this.repos.scans.updateStatus(scanId, 'RUNNING', {
-                pagesScanned: live.pagesScanned,
-                cookiesFound: live.cookiesFound,
-                trackersFound: live.trackersFound,
+                pagesScanned: progress.pagesScanned,
+                cookiesFound: progress.cookiesFound,
+                trackersFound: progress.trackersFound,
+              });
+            } catch (pageError) {
+              this.logger.error(
+                `Scan ${scanId} page persist failed: ${
+                  pageError instanceof Error ? pageError.message : String(pageError)
+                }`,
+              );
+              await this.repos.scans.updateStatus(scanId, 'RUNNING', {
+                pagesScanned: progress.pagesScanned,
+                cookiesFound: progress.cookiesFound,
+                trackersFound: progress.trackersFound,
               });
             }
           },
-        },
-      );
+          {
+            isCancelled: () => this.cancelRequests.has(scanId),
+            onStage: async (stage) => {
+              await this.repos.scans.updateStatus(scanId, 'RUNNING', {
+                progressMessage: stage,
+              });
+            },
+          },
+        );
+      } finally {
+        clearInterval(heartbeat);
+      }
 
       const latest = await this.repos.scans.findById(scanId);
       if (
@@ -475,6 +507,7 @@ export class ScansService {
           cookiesFound: 0,
           trackersFound: 0,
           errorMessage: pageError,
+          progressMessage: null,
         });
         void this.webhookDelivery.emit(scan.organizationId, 'scan.failed', {
           scanId,
@@ -498,6 +531,7 @@ export class ScansService {
         pagesScanned: result.pagesScanned,
         cookiesFound,
         trackersFound,
+        progressMessage: null,
       });
 
       try {
@@ -531,6 +565,7 @@ export class ScansService {
             cookiesFound: live.cookiesFound,
             trackersFound: live.trackersFound,
             errorMessage: 'Cancelled by user',
+            progressMessage: null,
           });
         }
         try {
@@ -548,6 +583,7 @@ export class ScansService {
       const message = error instanceof Error ? error.message : 'Scan failed';
       await this.repos.scans.updateStatus(scanId, 'FAILED', {
         errorMessage: message,
+        progressMessage: null,
         completedAt: new Date(),
         durationMs: Date.now() - startedAt.getTime(),
       });
@@ -588,6 +624,7 @@ export class ScansService {
     cookiesFound: number;
     trackersFound: number;
     errorMessage: string | null;
+    progressMessage?: string | null;
     startedAt: Date | null;
     completedAt: Date | null;
     durationMs: number | null;
@@ -604,6 +641,7 @@ export class ScansService {
       cookiesFound: scan.cookiesFound,
       trackersFound: scan.trackersFound,
       errorMessage: scan.errorMessage,
+      progressMessage: scan.progressMessage ?? null,
       startedAt: scan.startedAt?.toISOString() ?? null,
       completedAt: scan.completedAt?.toISOString() ?? null,
       durationMs: scan.durationMs,

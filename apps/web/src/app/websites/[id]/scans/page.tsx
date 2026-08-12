@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/protected-layout';
 import { LoadingScreen } from '@/components/loading-screen';
@@ -12,7 +12,6 @@ import {
   useWebsiteScan,
 } from '@/components/website-scan-context';
 import { WebsiteSetupSteps } from '@/components/website-setup-steps';
-import { useRunningScanPoll } from '@/hooks/use-running-scan-poll';
 import { apiFetch, ensureApiSession } from '@/lib/api';
 
 interface Domain {
@@ -36,6 +35,7 @@ interface ScanSummary {
   cookiesFound: number;
   trackersFound: number;
   errorMessage: string | null;
+  progressMessage?: string | null;
   durationMs: number | null;
   createdAt: string;
 }
@@ -59,39 +59,13 @@ function formatStarted(iso: string) {
 function WebsiteScansContent({ domain }: { domain: Domain }) {
   const domainId = domain.id;
   const websiteScan = useWebsiteScan();
-  const [scans, setScans] = useState<ScanSummary[]>([]);
+  const scans = websiteScan?.scans ?? [];
+  const hasRunningScan = Boolean(websiteScan?.hasRunningScan);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
-
-  function loadScans(silent = false) {
-    return apiFetch<ScanSummary[]>(`/domains/${domainId}/scans`, { silent }).then((r) => {
-      if (r.data) {
-        setScans(r.data);
-      } else if (r.error?.code === 'UNAUTHORIZED') {
-        setError('Session expired. Please sign in again.');
-      }
-    });
-  }
-
-  const hasRunningScan =
-    scans.some((s) => s.status === 'RUNNING') || Boolean(websiteScan?.hasRunningScan);
-
-  const pollScans = useCallback(async () => {
-    await loadScans(true);
-  }, [domainId]);
-
-  const refreshAfterScan = useCallback(async () => {
-    await loadScans(true);
-  }, [domainId]);
-
-  useRunningScanPoll(hasRunningScan, pollScans, refreshAfterScan);
-
-  useEffect(() => {
-    loadScans();
-  }, [domainId]);
 
   useEffect(() => {
     if (websiteScan?.flashMessage) {
@@ -125,7 +99,6 @@ function WebsiteScansContent({ domain }: { domain: Domain }) {
     if (result.ok) {
       setMessage('Homepage scan started');
       websiteScan?.notifyScanStarted();
-      await loadScans(true);
     } else {
       setError(result.error?.message ?? 'Failed to start scan');
     }
@@ -157,7 +130,6 @@ function WebsiteScansContent({ domain }: { domain: Domain }) {
     if (result.ok) {
       setMessage('Full site scan started');
       websiteScan?.notifyScanStarted();
-      await loadScans(true);
     } else {
       setError(result.error?.message ?? 'Failed to start scan');
     }
@@ -179,7 +151,7 @@ function WebsiteScansContent({ domain }: { domain: Domain }) {
     setCancellingId(null);
     if (result.ok) {
       setMessage('Scan stopped');
-      await loadScans(true);
+      await websiteScan?.refreshScans();
     } else {
       setError(result.error?.message ?? 'Failed to stop scan');
     }
@@ -202,13 +174,12 @@ function WebsiteScansContent({ domain }: { domain: Domain }) {
     if (result.ok) {
       setMessage('Scan restarted');
       websiteScan?.notifyScanStarted();
-      await loadScans(true);
     } else {
       setError(result.error?.message ?? 'Failed to retry scan');
     }
   }
 
-  const runningScan = scans.find((s) => s.status === 'RUNNING');
+  const runningScan = websiteScan?.runningScan;
 
   return (
     <>
@@ -340,6 +311,11 @@ function WebsiteScansContent({ domain }: { domain: Domain }) {
                                 {scan.pagesScanned}/{scan.maxPages} pages (
                                 {scan.progressPercent ?? pagePct}%)
                               </p>
+                              {scan.progressMessage && (
+                                <p className="progress-meta" style={{ marginTop: '0.25rem' }}>
+                                  {scan.progressMessage}
+                                </p>
+                              )}
                             </>
                           )}
                           {scan.errorMessage && (

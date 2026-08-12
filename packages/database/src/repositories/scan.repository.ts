@@ -82,7 +82,7 @@ export class ScanRepository {
         data: {
           status: 'FAILED',
           errorMessage:
-            'Scan stalled with no progress for 3 minutes. Stop the scan and start a new one.',
+            'Scan worker stopped updating (Chromium likely hung or Cloud Run froze the background job). Stop and retry; if it keeps happening, check API Cloud Run logs for playwright/chromium errors.',
           completedAt: new Date(),
         },
       });
@@ -161,6 +161,7 @@ export class ScanRepository {
     status: ScanStatus,
     patch?: {
       errorMessage?: string | null;
+      progressMessage?: string | null;
       startedAt?: Date;
       completedAt?: Date;
       durationMs?: number;
@@ -174,6 +175,7 @@ export class ScanRepository {
       data: {
         status,
         errorMessage: patch?.errorMessage,
+        progressMessage: patch?.progressMessage,
         startedAt: patch?.startedAt,
         completedAt: patch?.completedAt,
         durationMs: patch?.durationMs,

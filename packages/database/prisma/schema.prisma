@@ -536,6 +536,7 @@ model DomainScan {
   cookiesFound    Int        @default(0) @map("cookies_found")
   trackersFound   Int        @default(0) @map("trackers_found")
   errorMessage    String?    @map("error_message")
+  progressMessage String?    @map("progress_message")
   startedAt       DateTime?  @map("started_at")
   completedAt     DateTime?  @map("completed_at")
   durationMs      Int?       @map("duration_ms")

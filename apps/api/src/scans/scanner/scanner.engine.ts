@@ -1,6 +1,7 @@
 import type { DomainScan } from '@cmp/database';
 import type { ScanFindingInput } from '@cmp/database';
 import type { Browser, BrowserContext, Page } from 'playwright';
+import { getSharedBrowser, relaunchSharedBrowser } from './browser-pool';
 import {
   cookiesToFindings,
   countFindingStats,
@@ -14,7 +15,6 @@ import {
   discoverSitemapUrls,
   enqueueDiscoveredLinks,
   getHostname,
-  CHROMIUM_LAUNCH_ARGS,
   matchesPathRules,
   mergeDiscoveredLinks,
   normalizeUrl,
@@ -59,6 +59,8 @@ export interface RunWebsiteScanOptions {
   isCancelled?: () => boolean;
   /** Called periodically so callers can refresh scan.updatedAt / detect liveness. */
   onHeartbeat?: () => Promise<void> | void;
+  /** Live stage text for UI (5a–5f style progress). */
+  onStage?: (stage: string) => Promise<void> | void;
 }
 
 async function withTimeout<T>(label: string, timeoutMs: number, fn: () => Promise<T>): Promise<T> {
@@ -404,29 +406,14 @@ export async function runWebsiteScan(
     }
   };
 
-  const launchBrowser = async (): Promise<Browser> => {
+  const launchBrowser = async (force = false): Promise<Browser> => {
     await closeQuietly(page);
     await closeQuietly(context);
     page = null;
     context = null;
 
-    if (browser) {
-      await closeQuietly(browser);
-      browser = null;
-    }
-
-    const next = await withTimeout('chromium launch', 30_000, () =>
-      playwright.chromium.launch({
-        headless: true,
-        args: CHROMIUM_LAUNCH_ARGS,
-      }),
-    );
-    next.on('disconnected', () => {
-      pageCrashed = true;
-      browser = null;
-      context = null;
-      page = null;
-    });
+    // Reuse a warm shared Chromium on Cloud Run — per-scan launch often times out.
+    const next = force ? await relaunchSharedBrowser() : await getSharedBrowser();
     browser = next;
     pageCrashed = false;
     return next;
@@ -456,7 +443,7 @@ export async function runWebsiteScan(
     } catch (error) {
       // Browser process died between isConnected() and newContext(); relaunch once.
       if (!isTargetClosedError(error)) throw error;
-      active = await launchBrowser();
+      active = await launchBrowser(true);
       nextContext = await active.newContext(contextConfig);
     }
 
@@ -494,10 +481,20 @@ export async function runWebsiteScan(
     return createSession();
   };
 
-  await withTimeout('browser session start', 45_000, async () => {
+  const reportStage = async (stage: string) => {
+    try {
+      await options?.onStage?.(stage);
+    } catch {
+      /* progress UI is best-effort */
+    }
+  };
+
+  await reportStage('5a · Launching headless browser…');
+  await withTimeout('browser session start', 75_000, async () => {
     await launchBrowser();
     await createSession();
   });
+  await reportStage('5a · Browser ready');
 
   const queue: Array<{ url: string; depth: number }> = [{ url: scan.startUrl, depth: 0 }];
   const seen = new Set<string>();
@@ -556,6 +553,7 @@ export async function runWebsiteScan(
 
     try {
       await withTimeout('page scan', pageBudgetMs, async () => {
+        await reportStage(`5b · Opening page (${normalized})…`);
         await navigateForScan(
           activePage,
           normalized,
@@ -567,17 +565,20 @@ export async function runWebsiteScan(
         const runConsentProbe =
           startNormalized !== null && normalized === startNormalized;
         if (runConsentProbe) {
+          await reportStage('5c · Waiting for CMP SDK…');
           await waitForCmpSdk(activePage, cmpWaitMs);
         }
 
         const pageIdPlaceholder = null;
         // Homepage scans don't crawl further — skip expensive link extraction.
         if (current.depth < scan.maxDepth) {
+          await reportStage('5b · Discovering links…');
           const html = await activePage.content();
           const anchorHrefs = await extractAnchorHrefs(activePage);
           discoveredLinks = mergeDiscoveredLinks(html, anchorHrefs, normalized, siteHostname);
         }
 
+        await reportStage('5d · Capturing cookies/trackers (before consent)…');
         pageFindings.push(
           ...(await scanPageState(
             activePage,
@@ -593,9 +594,11 @@ export async function runWebsiteScan(
 
         if (runConsentProbe) {
           // Fast homepage path: one accept pass only (no second full reload + reject).
+          await reportStage('5e · Applying accept-all consent…');
           const accepted = await clickCmpAction(activePage, 'accept-all', cmpSettleMs);
           if (accepted) {
             await settlePage(activePage, cmpSettleMs, 'after-accept settle');
+            await reportStage('5e · Capturing after accept…');
             pageFindings.push(
               ...(await scanPageState(
                 activePage,
@@ -608,10 +611,13 @@ export async function runWebsiteScan(
                 { includeFrames: !homepageOnly },
               )),
             );
+          } else {
+            await reportStage('5e · Accept control not found (skipped)');
           }
 
           if (!homepageOnly) {
             try {
+              await reportStage('5e · Reloading for reject-all probe…');
               await navigateForScan(
                 activePage,
                 normalized,
@@ -623,6 +629,7 @@ export async function runWebsiteScan(
               const rejected = await clickCmpAction(activePage, 'reject-all', cmpSettleMs);
               if (rejected) {
                 await settlePage(activePage, cmpSettleMs, 'after-reject settle');
+                await reportStage('5e · Capturing after reject…');
                 pageFindings.push(
                   ...(await scanPageState(
                     activePage,
@@ -724,7 +731,7 @@ export async function runWebsiteScan(
             const closed = pageCrashed || isTargetClosedError(error);
             if (attempt < maxAttempts && closed) {
               // Full Chromium relaunch — newContext alone fails once the process is dead.
-              await launchBrowser();
+              await launchBrowser(true);
               continue;
             }
             break;
@@ -755,6 +762,7 @@ export async function runWebsiteScan(
         allFindings.push(...pageFindings);
 
         if (onPageScanned) {
+          await reportStage('5f · Saving page results…');
           const progressStats = countFindingStats(dedupeFindings(allFindings));
           await onPageScanned(pageRecord, {
             pagesScanned,
@@ -764,11 +772,12 @@ export async function runWebsiteScan(
         }
       }
     });
+    await reportStage('5f · Scan finished');
   } finally {
     if (heartbeatTimer) clearInterval(heartbeatTimer);
+    // Keep the shared Chromium process warm for the next scan.
     await closeQuietly(page);
     await closeQuietly(context);
-    await closeQuietly(browser);
   }
 
   const deduped = dedupeFindings(allFindings);
