@@ -8,6 +8,7 @@ import { LoadingScreen } from '@/components/loading-screen';
 import { WebsiteLayout } from '@/components/website-layout';
 import { WebsiteScanStatus } from '@/components/website-scan-context';
 import { WebsiteDomainOverview } from '@/components/website-domain-overview';
+import { WebsiteDashboard } from '@/components/website-dashboard';
 import { WebsiteScanSettings } from '@/components/website-scan-settings';
 import { WebsiteSetupSteps } from '@/components/website-setup-steps';
 import { apiFetch } from '@/lib/api';
@@ -196,7 +197,16 @@ export default function DomainDetailPage() {
       {message && <p className="success">{message}</p>}
       {error && <p className="error">{error}</p>}
 
-      <div className="website-setup-overview-row">
+      <WebsiteDashboard
+        domainId={domain.id}
+        hostname={domain.hostname}
+        sdkLastSeenAt={domain.sdkLastSeenAt}
+        scanFrequency={settings.scanFrequency}
+        nextScanAt={domain.nextScanAt}
+        enabled={settings.enabled}
+      />
+
+      <div className="website-setup-overview-row" style={{ marginTop: '1.5rem' }}>
         <div className="card website-setup-card">
           <WebsiteSetupSteps
             domainId={domain.id}
