@@ -132,7 +132,7 @@ function DonutChart({
   const segments = [
     { value: accepted, color: '#22c55e' },
     { value: rejected, color: '#f43f5e' },
-    { value: partial, color: '#3b82f6' },
+    { value: partial, color: '#33a8db' },
   ];
   let offset = 0;
 
@@ -198,9 +198,9 @@ function AreaChart({ points }: { points: Array<{ label: string; count: number }>
     <div className="wd-area-chart">
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Consent activity chart">
         <path d={area} fill="rgba(59, 130, 246, 0.18)" />
-        <path d={line} fill="none" stroke="#3b82f6" strokeWidth="2.5" />
+        <path d={line} fill="none" stroke="#33a8db" strokeWidth="2.5" />
         {coords.map((c) => (
-          <circle key={c.label} cx={c.x} cy={c.y} r="3" fill="#2563eb" />
+          <circle key={c.label} cx={c.x} cy={c.y} r="3" fill="#0192d0" />
         ))}
       </svg>
       <div className="wd-area-labels">

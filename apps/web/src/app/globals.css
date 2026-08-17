@@ -5,8 +5,8 @@
   --border: #e2e8f0;
   --text: #0f172a;
   --muted: #64748b;
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
+  --primary: #0192d0;
+  --primary-hover: #0177ab;
   --danger: #dc2626;
   --success: #16a34a;
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
@@ -1526,7 +1526,7 @@ code {
 
 .alert-info .alert-icon {
   background: #dbeafe;
-  color: #2563eb;
+  color: #0192d0;
 }
 
 .status-badge {
@@ -1551,11 +1551,11 @@ code {
 
 .status-badge-running {
   background: #dbeafe;
-  color: #1d4ed8;
+  color: #0177ab;
 }
 
 .status-badge-running .status-badge-dot {
-  background: #2563eb;
+  background: #0192d0;
   animation: pulse-dot 1.5s ease-in-out infinite;
 }
 
@@ -1616,7 +1616,7 @@ code {
 .progress-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--primary), #3b82f6);
+  background: linear-gradient(90deg, var(--primary), #33a8db);
   transition: width 0.35s ease;
 }
 
@@ -2011,12 +2011,12 @@ code {
   background: var(--surface-muted);
 }
 .cookies-report-detail-btn-primary {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: #0192d0;
+  border-color: #0192d0;
   color: #fff;
 }
 .cookies-report-detail-btn-primary:hover:not(:disabled) {
-  background: #1d4ed8;
+  background: #0177ab;
 }
 .cookies-report-row-detail-error {
   margin-bottom: 0.75rem;
@@ -2099,8 +2099,8 @@ code {
   display: inline-block;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #2563eb;
-  border-bottom: 2px solid #2563eb;
+  color: #0192d0;
+  border-bottom: 2px solid #0192d0;
   padding-bottom: 0.25rem;
   margin-bottom: 0.5rem;
 }
@@ -2112,7 +2112,7 @@ code {
 .cookies-report-link-btn {
   background: none;
   border: none;
-  color: #2563eb;
+  color: #0192d0;
   font-size: inherit;
   cursor: pointer;
   padding: 0;
@@ -2377,7 +2377,7 @@ code {
   padding: 0.1rem 0.4rem;
   border-radius: 999px;
   background: #eff6ff;
-  color: #1d4ed8;
+  color: #0177ab;
   font-size: 0.6875rem;
   font-weight: 600;
   vertical-align: middle;
@@ -2491,7 +2491,7 @@ code {
 }
 .wd-dot.accepted { background: #22c55e; }
 .wd-dot.rejected { background: #f43f5e; }
-.wd-dot.partial { background: #3b82f6; }
+.wd-dot.partial { background: #33a8db; }
 .wd-area-chart {
   width: 100%;
 }
@@ -2548,7 +2548,7 @@ code {
 }
 .wd-consent-pill.partial {
   background: #dbeafe;
-  color: #1d4ed8;
+  color: #0177ab;
 }
 .wd-consent-pill.neutral {
   background: #f3f4f6;
@@ -2578,7 +2578,7 @@ code {
   justify-content: space-between;
   gap: 1rem;
   padding: 0.65rem 1.25rem;
-  background: #1d4ed8;
+  background: #0177ab;
   color: #fff;
 }
 .cy-topbar-left,
@@ -2661,12 +2661,12 @@ code {
   white-space: nowrap;
 }
 .cy-subnav-links a:hover {
-  color: #1d4ed8;
+  color: #0177ab;
 }
 .cy-subnav-links a.active {
-  color: #1d4ed8;
+  color: #0177ab;
   font-weight: 600;
-  border-bottom-color: #2563eb;
+  border-bottom-color: #0192d0;
 }
 .cy-subnav-meta {
   display: flex;
