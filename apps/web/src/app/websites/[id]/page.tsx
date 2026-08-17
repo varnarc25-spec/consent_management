@@ -197,6 +197,15 @@ export default function DomainDetailPage() {
       {message && <p className="success">{message}</p>}
       {error && <p className="error">{error}</p>}
 
+      <div className="card website-setup-card">
+        <WebsiteSetupSteps
+          domainId={domain.id}
+          hostname={domain.hostname}
+          verificationStatus={domain.verificationStatus}
+          sdkLastSeenAt={domain.sdkLastSeenAt}
+        />
+      </div>
+
       <WebsiteDomainOverview
         domainId={domain.id}
         hostname={domain.hostname}
@@ -214,15 +223,6 @@ export default function DomainDetailPage() {
         nextScanAt={domain.nextScanAt}
         enabled={settings.enabled}
       />
-
-      <div className="card website-setup-card" style={{ marginTop: '1.5rem' }}>
-        <WebsiteSetupSteps
-          domainId={domain.id}
-          hostname={domain.hostname}
-          verificationStatus={domain.verificationStatus}
-          sdkLastSeenAt={domain.sdkLastSeenAt}
-        />
-      </div>
 
       <div className="card website-domain-merged" style={{ marginTop: '1.5rem' }}>
         <div className="website-domain-split">
