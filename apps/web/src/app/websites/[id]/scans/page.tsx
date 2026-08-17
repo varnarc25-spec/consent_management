@@ -231,7 +231,7 @@ function WebsiteScansContent({ domain }: { domain: Domain }) {
               <h4>Homepage scan</h4>
               <p>
                 One page with full consent probing. Recommended for cookie inventory and quick
-                checks (~1 min).
+                checks (~1–3 min on Cloud Run). SDK install is not required for discovery.
               </p>
               <button
                 className="btn"
@@ -311,11 +311,12 @@ function WebsiteScansContent({ domain }: { domain: Domain }) {
                                 {scan.pagesScanned}/{scan.maxPages} pages (
                                 {scan.progressPercent ?? pagePct}%)
                               </p>
-                              {scan.progressMessage && (
-                                <p className="progress-meta" style={{ marginTop: '0.25rem' }}>
-                                  {scan.progressMessage}
-                                </p>
-                              )}
+                              <p className="progress-meta" style={{ marginTop: '0.25rem' }}>
+                                {scan.progressMessage?.trim() ||
+                                  (scan.pagesScanned === 0
+                                    ? 'Working… launching browser and opening the site. 0% is normal until the first page completes (SDK not required).'
+                                    : 'Processing pages…')}
+                              </p>
                             </>
                           )}
                           {scan.errorMessage && (

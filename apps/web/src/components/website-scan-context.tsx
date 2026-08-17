@@ -131,15 +131,21 @@ export function WebsiteScanStatus() {
   const { hasRunningScan, runningScan, flashMessage } = ctx;
   if (!hasRunningScan && !flashMessage) return null;
 
+  const pagesLabel = runningScan?.maxPages
+    ? ` (${runningScan.pagesScanned ?? 0}/${runningScan.maxPages} pages)`
+    : '';
+  const stage =
+    runningScan?.progressMessage?.trim() ||
+    (runningScan && (runningScan.pagesScanned ?? 0) === 0
+      ? 'Starting browser and opening the site… (page count stays 0 until the first page finishes)'
+      : 'Scan worker is busy…');
+
   return (
     <div className="website-scan-status" role="status" aria-live="polite">
       {hasRunningScan && (
         <p className="website-scan-status-line success">
-          Scan in progress
-          {runningScan?.maxPages
-            ? ` (${runningScan.pagesScanned ?? 0}/${runningScan.maxPages} pages)`
-            : ''}
-          {runningScan?.progressMessage ? ` — ${runningScan.progressMessage}` : ''}
+          Scan running{pagesLabel}
+          {stage ? ` — ${stage}` : ''}
         </p>
       )}
       {flashMessage && <p className="website-scan-status-line success">{flashMessage}</p>}
