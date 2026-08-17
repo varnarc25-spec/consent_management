@@ -124,8 +124,8 @@ function DonutChart({
   partial: number;
   total: number;
 }) {
-  const size = 148;
-  const stroke = 22;
+  const size = 120;
+  const stroke = 18;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const safeTotal = total || 1;
@@ -411,7 +411,7 @@ export function WebsiteDashboard({
           </Link>
         </article>
 
-        <article className="wd-card">
+        <article className="wd-card wd-card-span-2">
           <div className="wd-card-body">
             <div className="wd-card-heading">
               <h3>Consent activity</h3>

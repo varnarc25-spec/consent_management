@@ -2275,8 +2275,15 @@ code {
 }
 .website-dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
+  align-items: stretch;
+}
+.wd-card-span-2 {
+  grid-column: span 2;
+}
+.wd-card-wide {
+  grid-column: 1 / -1;
 }
 .wd-card {
   background: #fff;
@@ -2286,9 +2293,6 @@ code {
   flex-direction: column;
   min-height: 100%;
   overflow: hidden;
-}
-.wd-card-wide {
-  grid-column: 1 / -1;
 }
 .wd-card-body {
   padding: 1.15rem 1.25rem 1rem;
@@ -2436,13 +2440,13 @@ code {
 .wd-trends {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
+  gap: 0.85rem;
   flex-wrap: wrap;
 }
 .wd-donut {
   position: relative;
-  width: 148px;
-  height: 148px;
+  width: 120px;
+  height: 120px;
   flex: 0 0 auto;
 }
 .wd-donut-center {
@@ -2555,9 +2559,12 @@ code {
   color: #4b5563;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .website-dashboard-grid {
     grid-template-columns: 1fr;
+  }
+  .wd-card-span-2 {
+    grid-column: auto;
   }
   .wd-meta-grid,
   .wd-stat-pair {
