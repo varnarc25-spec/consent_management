@@ -61,9 +61,9 @@ export class ScanRepository {
   }
 
   async expireStaleRunningScans(domainId?: string, maxAgeMs = 30 * 60 * 1000) {
-    // Fail hung scans quickly: homepage Chromium hangs previously sat at 0% for 10 minutes.
-    const stalledCutoff = new Date(Date.now() - 3 * 60 * 1000);
-    const zeroProgressCutoff = new Date(Date.now() - 3 * 60 * 1000);
+    // Fail hung scans, but allow Cloud Run cold Chromium + slow WP pages (~2–4 min).
+    const stalledCutoff = new Date(Date.now() - 5 * 60 * 1000);
+    const zeroProgressCutoff = new Date(Date.now() - 5 * 60 * 1000);
     const cutoff = new Date(Date.now() - maxAgeMs);
     const domainFilter = domainId ? { domainId } : {};
 

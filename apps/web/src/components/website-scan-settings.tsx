@@ -38,7 +38,7 @@ export function WebsiteScanSettings({
         startUrl: `https://${hostname}/`,
         maxPages: 1,
         maxDepth: 0,
-        timeoutMs: 20000,
+        timeoutMs: 60000,
         jsRendering: true,
         deviceType: 'desktop',
       }),

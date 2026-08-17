@@ -425,7 +425,7 @@ export class ScansService implements OnModuleInit {
             });
           })
           .catch(() => undefined);
-      }, 15_000);
+      }, 10_000);
 
       let result;
       try {
@@ -469,6 +469,16 @@ export class ScansService implements OnModuleInit {
           },
           {
             isCancelled: () => this.cancelRequests.has(scanId),
+            onHeartbeat: async () => {
+              const live = await this.repos.scans.findById(scanId);
+              if (live?.status !== 'RUNNING') return;
+              await this.repos.scans.updateStatus(scanId, 'RUNNING', {
+                pagesScanned: live.pagesScanned,
+                cookiesFound: live.cookiesFound,
+                trackersFound: live.trackersFound,
+                progressMessage: live.progressMessage,
+              });
+            },
             onStage: async (stage) => {
               await this.repos.scans.updateStatus(scanId, 'RUNNING', {
                 progressMessage: stage,

@@ -519,13 +519,17 @@ export async function runWebsiteScan(
 
   const startNormalized = normalizeUrl(scan.startUrl);
 
-  // Homepage consent probe is single-pass; keep budgets tight.
+  // Cloud Run Chromium is much slower than local — homepage needs headroom
+  // for cold launch + WP Engine/Cloudflare + consent capture.
   const pageBudgetMs = homepageOnly
-    ? Math.min(Math.max(scan.timeoutMs, 30_000), 45_000)
+    ? Math.min(Math.max(scan.timeoutMs * 2, 90_000), 120_000)
     : Math.min(scan.timeoutMs * 4, 120_000);
   const overallBudgetMs = homepageOnly
-    ? Math.min(Math.max(scan.timeoutMs * 2, 60_000), 90_000)
+    ? Math.min(Math.max(scan.timeoutMs * 3, 180_000), 240_000)
     : Math.min(Math.max(scan.timeoutMs * scan.maxPages, 180_000), 600_000);
+  const navTimeoutMs = homepageOnly
+    ? Math.min(Math.max(scan.timeoutMs, 45_000), 60_000)
+    : scan.timeoutMs;
 
   const scanSinglePage = async (
     activePage: Page,
@@ -558,7 +562,7 @@ export async function runWebsiteScan(
           activePage,
           normalized,
           scan.jsRendering,
-          homepageOnly ? Math.min(scan.timeoutMs, 25_000) : scan.timeoutMs,
+          navTimeoutMs,
           navSettleMs,
         );
 
@@ -679,7 +683,7 @@ export async function runWebsiteScan(
   if (options?.onHeartbeat) {
     heartbeatTimer = setInterval(() => {
       void Promise.resolve(options.onHeartbeat?.()).catch(() => undefined);
-    }, 15_000);
+    }, 10_000);
   }
 
   try {
