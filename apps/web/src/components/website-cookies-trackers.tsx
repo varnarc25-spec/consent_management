@@ -91,7 +91,7 @@ export function WebsiteCookiesTrackers({
       {categoriesWithCounts.length > 0 && (
         <ul className="domain-cookie-cat-list">
           {categoriesWithCounts.map((cat) => (
-            <li key={cat.key}>
+            <li key={cat.slug}>
               <span>{cat.label}</span>
               <strong>{cat.count}</strong>
             </li>

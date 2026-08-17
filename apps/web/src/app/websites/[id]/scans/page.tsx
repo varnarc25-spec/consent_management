@@ -286,10 +286,10 @@ function WebsiteScansContent({ domain }: { domain: Domain }) {
                 </thead>
                 <tbody>
                   {scans.map((scan) => {
+                    const maxPages = scan.maxPages ?? 0;
+                    const pagesScanned = scan.pagesScanned ?? 0;
                     const pagePct =
-                      scan.maxPages > 0
-                        ? Math.round((scan.pagesScanned / scan.maxPages) * 100)
-                        : 0;
+                      maxPages > 0 ? Math.round((pagesScanned / maxPages) * 100) : 0;
                     return (
                       <tr key={scan.id}>
                         <td>
@@ -308,12 +308,12 @@ function WebsiteScansContent({ domain }: { domain: Domain }) {
                                 />
                               </div>
                               <p className="progress-meta">
-                                {scan.pagesScanned}/{scan.maxPages} pages (
+                                {pagesScanned}/{maxPages} pages (
                                 {scan.progressPercent ?? pagePct}%)
                               </p>
                               <p className="progress-meta" style={{ marginTop: '0.25rem' }}>
                                 {scan.progressMessage?.trim() ||
-                                  (scan.pagesScanned === 0
+                                  (pagesScanned === 0
                                     ? 'Working… launching browser and opening the site. 0% is normal until the first page completes (SDK not required).'
                                     : 'Processing pages…')}
                               </p>
@@ -324,11 +324,11 @@ function WebsiteScansContent({ domain }: { domain: Domain }) {
                           )}
                         </td>
                         <td className="data-table-num">
-                          {scan.pagesScanned}/{scan.maxPages}
+                          {pagesScanned}/{maxPages}
                         </td>
                         <td className="data-table-num">{scan.cookiesFound}</td>
                         <td className="data-table-num">{scan.trackersFound}</td>
-                        <td className="data-table-num">{formatDuration(scan.durationMs)}</td>
+                        <td className="data-table-num">{formatDuration(scan.durationMs ?? null)}</td>
                         <td>
                           <div className="table-actions">
                             {scan.status === 'RUNNING' && (
