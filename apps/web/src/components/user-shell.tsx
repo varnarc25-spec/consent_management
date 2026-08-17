@@ -18,6 +18,12 @@ export function UserShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const isWebsiteWorkspace = /^\/websites\/[^/]+/.test(pathname);
+
+  // Website detail pages use CookieYes-style chrome from WebsiteLayout.
+  if (isWebsiteWorkspace) {
+    return <div className="portal-layout portal-layout-bare">{children}</div>;
+  }
 
   function isNavActive(href: string) {
     if (href === '/dashboard') {
@@ -44,11 +50,6 @@ export function UserShell({
               {item.label}
             </Link>
           ))}
-          {pathname.startsWith('/websites/') && (
-            <Link href="/dashboard" className="nav-back-link">
-              ← All websites
-            </Link>
-          )}
         </nav>
         <div className="nav-actions">
           <ProfileMenu user={user} />

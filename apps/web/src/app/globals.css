@@ -126,6 +126,24 @@ p { margin: 0 0 1rem; }
   min-height: 100vh;
   background: var(--bg);
 }
+.portal-layout-bare {
+  background: #f3f4f6;
+}
+.portal-layout-bare > .cy-shell {
+  min-height: 100vh;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 .portal-main {
   padding-top: 1.5rem;
@@ -574,10 +592,8 @@ code {
 
 /* Website detail sidebar */
 .website-layout {
-  display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: 2rem;
-  align-items: start;
+  display: block;
+  width: 100%;
 }
 .website-main {
   min-width: 0;
@@ -825,13 +841,10 @@ code {
 }
 @media (max-width: 1100px) {
   .website-layout {
-    grid-template-columns: 280px minmax(0, 1fr);
+    display: block;
   }
 }
 @media (max-width: 900px) {
-  .website-layout {
-    grid-template-columns: 1fr;
-  }
   .website-setup-overview-row {
     grid-template-columns: 1fr;
   }
@@ -2549,5 +2562,158 @@ code {
   .wd-meta-grid,
   .wd-stat-pair {
     grid-template-columns: 1fr;
+  }
+}
+
+/* CookieYes-style website chrome */
+.cy-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #f3f4f6;
+}
+.cy-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 1.25rem;
+  background: #1d4ed8;
+  color: #fff;
+}
+.cy-topbar-left,
+.cy-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+.cy-logo-link {
+  text-decoration: none;
+  color: inherit;
+}
+.cy-logo .cmp-logo-text {
+  color: #fff;
+}
+.cy-site-select-wrap {
+  min-width: 0;
+}
+.cy-site-select {
+  max-width: min(320px, 48vw);
+  border: 0;
+  border-radius: 6px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.875rem;
+  background: #fff;
+  color: #111827;
+}
+.cy-top-link {
+  color: #fff;
+  text-decoration: none;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+.cy-top-link:hover {
+  text-decoration: underline;
+}
+.cy-top-link-accent {
+  background: #16a34a;
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  font-weight: 600;
+}
+.cy-top-link-accent:hover {
+  text-decoration: none;
+  filter: brightness(1.05);
+}
+.cy-topbar .profile-menu-trigger {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+}
+.cy-topbar .profile-menu-name {
+  color: #fff;
+}
+.cy-subnav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1.25rem;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  flex-wrap: wrap;
+}
+.cy-subnav-links {
+  display: flex;
+  align-items: stretch;
+  gap: 0.15rem;
+  overflow-x: auto;
+  min-width: 0;
+}
+.cy-subnav-links a {
+  flex: 0 0 auto;
+  padding: 0.9rem 0.75rem;
+  color: #374151;
+  text-decoration: none;
+  font-size: 0.875rem;
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+}
+.cy-subnav-links a:hover {
+  color: #1d4ed8;
+}
+.cy-subnav-links a.active {
+  color: #1d4ed8;
+  font-weight: 600;
+  border-bottom-color: #2563eb;
+}
+.cy-subnav-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  font-size: 0.8125rem;
+  color: #4b5563;
+  padding: 0.55rem 0;
+}
+.cy-pageviews strong {
+  color: #111827;
+}
+.cy-upgrade-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #f97316;
+  color: #fff !important;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+}
+.cy-upgrade-btn:hover {
+  filter: brightness(1.05);
+}
+.cy-main {
+  width: min(1280px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1.25rem 0 2.5rem;
+}
+
+@media (max-width: 900px) {
+  .cy-topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cy-topbar-right {
+    justify-content: space-between;
+  }
+  .cy-subnav {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cy-subnav-meta {
+    justify-content: space-between;
   }
 }
