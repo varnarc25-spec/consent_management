@@ -72,7 +72,7 @@ export function BannerPreview({
   viewport = 'desktop',
 }: BannerPreviewProps) {
   const frameWidth = viewport === 'mobile' ? 375 : viewport === 'tablet' ? 768 : 1100;
-  const primary = theme?.primaryColor ?? '#2563eb';
+  const primary = theme?.primaryColor ?? '#0192d0';
   const background = theme?.backgroundColor ?? '#ffffff';
   const text = theme?.textColor ?? '#111827';
   const buttonText = theme?.buttonTextColor ?? '#ffffff';

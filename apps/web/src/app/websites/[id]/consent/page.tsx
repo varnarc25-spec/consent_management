@@ -132,7 +132,7 @@ const defaultBanner = (): BannerState => ({
     excludePages: '',
   },
   theme: {
-    primaryColor: '#2563eb',
+    primaryColor: '#0192d0',
     backgroundColor: '#ffffff',
     textColor: '#111827',
     buttonTextColor: '#ffffff',
