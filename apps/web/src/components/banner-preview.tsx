@@ -1,6 +1,6 @@
 'use client';
 
-import type { CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { getBannerContrastWarnings, scopeBannerCustomCss } from '@cmp/utils';
 
 export interface BannerPreviewProps {
@@ -33,6 +33,12 @@ export interface BannerPreviewProps {
     customCss?: string;
   };
   viewport?: 'desktop' | 'tablet' | 'mobile';
+  /** Live site hostname or full URL shown behind the banner. */
+  websiteUrl?: string | null;
+  /** Full-bleed CookieYes-style preview (fills the studio stage). */
+  variant?: 'card' | 'studio';
+  allowClose?: boolean;
+  onViewportChange?: (viewport: 'desktop' | 'tablet' | 'mobile') => void;
 }
 
 const layoutStyles: Record<string, CSSProperties> = {
@@ -56,6 +62,13 @@ const layoutStyles: Record<string, CSSProperties> = {
   compact: { bottom: '1rem', left: '1rem', right: '1rem', maxWidth: 720, margin: '0 auto' },
 };
 
+function normalizeWebsiteUrl(value?: string | null): string | null {
+  if (!value?.trim()) return null;
+  const trimmed = value.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed.replace(/^\/+/, '')}`;
+}
+
 export function BannerPreview({
   title,
   description,
@@ -63,6 +76,7 @@ export function BannerPreview({
   acceptButton,
   rejectButton,
   preferencesButton,
+  closeButton,
   legalNotice,
   footerContent,
   privacyPolicyUrl,
@@ -70,8 +84,24 @@ export function BannerPreview({
   layout,
   theme,
   viewport = 'desktop',
+  websiteUrl,
+  variant = 'card',
+  allowClose = false,
+  onViewportChange,
 }: BannerPreviewProps) {
-  const frameWidth = viewport === 'mobile' ? 375 : viewport === 'tablet' ? 768 : 1100;
+  const isStudio = variant === 'studio';
+  const frameWidth = isStudio
+    ? viewport === 'mobile'
+      ? 390
+      : viewport === 'tablet'
+        ? 768
+        : undefined
+    : viewport === 'mobile'
+      ? 375
+      : viewport === 'tablet'
+        ? 768
+        : 1100;
+  const frameHeight = isStudio ? undefined : viewport === 'mobile' ? 640 : 480;
   const primary = theme?.primaryColor ?? '#0192d0';
   const background = theme?.backgroundColor ?? '#ffffff';
   const text = theme?.textColor ?? '#111827';
@@ -85,6 +115,20 @@ export function BannerPreview({
     layout === 'multi_step_modal';
   const contrastWarnings = getBannerContrastWarnings(theme ?? {});
   const scopedCss = scopeBannerCustomCss(theme?.customCss ?? '', '.cmp-preview-root');
+  const resolvedUrl = useMemo(() => normalizeWebsiteUrl(websiteUrl), [websiteUrl]);
+  const [iframeStatus, setIframeStatus] = useState<'idle' | 'loading' | 'loaded' | 'blocked'>('idle');
+
+  useEffect(() => {
+    if (!resolvedUrl) {
+      setIframeStatus('idle');
+      return;
+    }
+    setIframeStatus('loading');
+    const timer = window.setTimeout(() => {
+      setIframeStatus((current) => (current === 'loading' ? 'blocked' : current));
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [resolvedUrl, viewport]);
 
   const primaryButtonStyle: CSSProperties =
     theme?.buttonStyle === 'outline'
@@ -94,24 +138,105 @@ export function BannerPreview({
         : { background: primary, color: buttonText, border: 0 };
 
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', background: '#f8fafc' }}>
+    <div
+      className={isStudio ? 'cy-preview-studio' : undefined}
+      style={
+        isStudio
+          ? undefined
+          : { border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', background: '#f8fafc' }
+      }
+    >
       {scopedCss ? <style>{scopedCss}</style> : null}
+      {resolvedUrl && !isStudio ? (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '0.75rem',
+            padding: '0.5rem 0.75rem',
+            borderBottom: '1px solid var(--border)',
+            fontSize: '.75rem',
+            color: 'var(--muted)',
+            background: '#fff',
+          }}
+        >
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            Previewing {resolvedUrl}
+          </span>
+          <a href={resolvedUrl} target="_blank" rel="noopener noreferrer" style={{ color: primary, flexShrink: 0 }}>
+            Open site
+          </a>
+        </div>
+      ) : null}
       <div
+        className={isStudio ? 'cy-preview-frame' : undefined}
         style={{
           position: 'relative',
-          height: 360,
+          height: isStudio ? '100%' : frameHeight,
           width: '100%',
-          maxWidth: frameWidth,
+          maxWidth: frameWidth ?? '100%',
           margin: '0 auto',
-          background: 'linear-gradient(180deg,#eef2ff,#f8fafc)',
+          background: resolvedUrl ? '#fff' : 'linear-gradient(180deg,#eef2ff,#f8fafc)',
+          overflow: 'hidden',
+          boxShadow: isStudio && viewport !== 'desktop' ? '0 12px 40px rgba(15,23,42,.18)' : undefined,
+          borderRadius: isStudio && viewport !== 'desktop' ? 12 : undefined,
         }}
       >
+        {resolvedUrl ? (
+          <>
+            {/* eslint-disable-next-line react/iframe-missing-sandbox -- preview needs full site rendering */}
+            <iframe
+              key={`${resolvedUrl}-${viewport}`}
+              title="Website preview"
+              src={resolvedUrl}
+              referrerPolicy="no-referrer"
+              onLoad={() => setIframeStatus('loaded')}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                border: 0,
+                pointerEvents: 'none',
+                background: '#fff',
+              }}
+            />
+            {(iframeStatus === 'loading' || iframeStatus === 'blocked') && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '1.5rem',
+                  textAlign: 'center',
+                  background:
+                    iframeStatus === 'blocked'
+                      ? 'linear-gradient(180deg,#eef2ff,#f8fafc)'
+                      : 'rgba(248,250,252,.72)',
+                  color: '#4b5563',
+                  fontSize: '.875rem',
+                  zIndex: 1,
+                  pointerEvents: 'none',
+                }}
+              >
+                {iframeStatus === 'loading'
+                  ? 'Loading website…'
+                  : 'This site blocks embedding in previews (X-Frame-Options / CSP). Banner styling still shows below — use “Open site” or Test live banner for the real page.'}
+              </div>
+            )}
+          </>
+        ) : null}
+
         {isModal && (
           <div
             style={{
               position: 'absolute',
               inset: 0,
               background: `rgba(17,24,39,${overlayOpacity})`,
+              zIndex: 2,
             }}
           />
         )}
@@ -120,6 +245,7 @@ export function BannerPreview({
           className="cmp-preview-root"
           style={{
             position: 'absolute',
+            zIndex: 3,
             background,
             color: text,
             borderRadius: radius,
@@ -133,6 +259,25 @@ export function BannerPreview({
           {theme?.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={theme.logoUrl} alt="" style={{ display: 'block', maxHeight: 40, marginBottom: '.75rem' }} />
+          ) : null}
+          {allowClose || closeButton ? (
+            <button
+              type="button"
+              aria-label={closeButton || 'Close'}
+              style={{
+                position: 'absolute',
+                top: 10,
+                right: 12,
+                border: 0,
+                background: 'transparent',
+                color: text,
+                fontSize: 18,
+                lineHeight: 1,
+                cursor: 'default',
+              }}
+            >
+              ×
+            </button>
           ) : null}
           {layout === 'multi_step_modal' && (
             <div style={{ display: 'flex', gap: '.5rem', marginBottom: '1rem' }}>
@@ -193,7 +338,14 @@ export function BannerPreview({
           {footerContent && <p style={{ marginTop: '.5rem', fontSize: '.75rem', color: '#4b5563' }}>{footerContent}</p>}
         </section>
       </div>
-      <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid var(--border)', fontSize: '.8125rem' }}>
+      {!isStudio ? (
+      <div
+        style={{
+          padding: '0.75rem 1rem',
+          borderTop: '1px solid var(--border)',
+          fontSize: '.8125rem',
+        }}
+      >
         {contrastWarnings.map((warning) => (
           <p key={warning.pair} style={{ margin: '0.25rem 0', color: warning.passes === false ? '#b45309' : 'var(--muted)' }}>
             {warning.pair}: {warning.ratio ? warning.ratio.toFixed(2) : 'n/a'}:1
@@ -201,6 +353,35 @@ export function BannerPreview({
           </p>
         ))}
       </div>
+      ) : null}
+      {isStudio && onViewportChange ? (
+        <div className="cy-preview-devices" role="group" aria-label="Preview size">
+          {(['desktop', 'tablet', 'mobile'] as const).map((size) => (
+            <button
+              key={size}
+              type="button"
+              className={viewport === size ? 'active' : undefined}
+              aria-pressed={viewport === size}
+              aria-label={size}
+              onClick={() => onViewportChange(size)}
+            >
+              {size === 'desktop' ? (
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                  <path fill="currentColor" d="M4 5h16v11H4V5Zm-1 13h18v2H3v-2Z" />
+                </svg>
+              ) : size === 'tablet' ? (
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                  <path fill="currentColor" d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm6 16.25a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                  <path fill="currentColor" d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm4 18.2a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" />
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { BannerPreview } from '@/components/banner-preview';
+import { BannerStudio, type BannerStudioPane } from '@/components/banner-studio';
 import { ProtectedLayout } from '@/components/protected-layout';
 import { WebsiteLayout } from '@/components/website-layout';
 import { apiFetch } from '@/lib/api';
@@ -121,8 +122,6 @@ interface Renewal {
   scope: string;
   createdAt: string;
 }
-
-type Tab = 'categories' | 'banner' | 'template' | 'regional' | 'policy' | 'renewals';
 
 const REGULATION_PROFILE_OPTIONS = listRegulationProfiles();
 
@@ -258,7 +257,7 @@ function serializeBanner(banner: BannerState) {
 export default function DomainConsentPage() {
   const params = useParams();
   const domainId = params.id as string;
-  const [tab, setTab] = useState<Tab>('banner');
+  const [pane, setPane] = useState<BannerStudioPane>('content');
   const [categories, setCategories] = useState<Category[]>([]);
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [draft, setDraft] = useState<Policy | null>(null);
@@ -277,6 +276,7 @@ export default function DomainConsentPage() {
   const [googleConsentMode, setGoogleConsentMode] = useState<GoogleConsentModeConfig>(defaultGoogleConsentMode());
   const [supportedLanguages, setSupportedLanguages] = useState<string[]>(['en']);
   const [defaultLanguage, setDefaultLanguage] = useState('en');
+  const [hostname, setHostname] = useState('');
 
   function applyTextTemplate(templateId: string) {
     const template = BANNER_TEXT_TEMPLATES.find((item) => item.id === templateId);
@@ -365,6 +365,9 @@ export default function DomainConsentPage() {
   }
 
   useEffect(() => {
+    apiFetch<{ hostname: string }>(`/domains/${domainId}`, { silent: true }).then((r) => {
+      if (r.data?.hostname) setHostname(r.data.hostname);
+    });
     loadCategories();
     loadPolicies();
     loadRenewals();
@@ -535,46 +538,513 @@ export default function DomainConsentPage() {
     }
   }
 
-  return (
-    <ProtectedLayout>
-      <WebsiteLayout domainId={domainId}>
-      <h1>Consent configuration</h1>
-      <p style={{ color: 'var(--muted)' }}>Manage categories, banner layout, behavior, and policy versions.</p>
+  const selectedTemplate = CONSENT_TEMPLATES.find((item) => item.id === consentTemplateId);
 
-      {message && <p className="success">{message}</p>}
-      {error && <p className="error">{error}</p>}
+  function renderPanel() {
+    if (pane === 'general') {
+      return (
+        <>
+          <div className="field">
+            <label htmlFor="consentTemplateStudio">Consent Template</label>
+            <select
+              id="consentTemplateStudio"
+              value={consentTemplateId}
+              onChange={(e) => {
+                const value = e.target.value as ConsentTemplateId | '';
+                if (!value) {
+                  setConsentTemplateId('');
+                  return;
+                }
+                applyConsentTemplate(value);
+              }}
+            >
+              <option value="">Choose a template…</option>
+              {CONSENT_TEMPLATES.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="cy-banner-hint">
+            {selectedTemplate?.description ??
+              'Pick GDPR, US State Laws, or both to set geo rules and suggested banner copy.'}
+          </p>
+          <h3>General</h3>
+          <div className="field">
+            <label htmlFor="textTemplateStudio">Text template</label>
+            <select
+              id="textTemplateStudio"
+              value={textTemplate}
+              onChange={(e) => {
+                setTextTemplate(e.target.value);
+                if (e.target.value) applyTextTemplate(e.target.value);
+              }}
+            >
+              <option value="">Choose a template…</option>
+              {BANNER_TEXT_TEMPLATES.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                checked={banner.behavior.displayOnFirstVisit}
+                onChange={(e) =>
+                  setBanner({ ...banner, behavior: { ...banner.behavior, displayOnFirstVisit: e.target.checked } })
+                }
+              />{' '}
+              Display on first visit
+            </label>
+          </div>
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                checked={banner.behavior.displayWhenPolicyChanges}
+                onChange={(e) =>
+                  setBanner({
+                    ...banner,
+                    behavior: { ...banner.behavior, displayWhenPolicyChanges: e.target.checked },
+                  })
+                }
+              />{' '}
+              Display when policy changes
+            </label>
+          </div>
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                checked={banner.behavior.respectGlobalPrivacyControl}
+                onChange={(e) =>
+                  setBanner({
+                    ...banner,
+                    behavior: { ...banner.behavior, respectGlobalPrivacyControl: e.target.checked },
+                  })
+                }
+              />{' '}
+              Respect Global Privacy Control (GPC)
+            </label>
+          </div>
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                checked={banner.behavior.allowClose}
+                onChange={(e) =>
+                  setBanner({ ...banner, behavior: { ...banner.behavior, allowClose: e.target.checked } })
+                }
+              />{' '}
+              Allow close without choosing
+            </label>
+          </div>
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                checked={banner.behavior.blockInteractionUntilChoice}
+                onChange={(e) =>
+                  setBanner({
+                    ...banner,
+                    behavior: { ...banner.behavior, blockInteractionUntilChoice: e.target.checked },
+                  })
+                }
+              />{' '}
+              Block interaction until choice
+            </label>
+          </div>
+          <div className="field">
+            <label htmlFor="consentExpirationDaysStudio">Consent expiration (days)</label>
+            <input
+              id="consentExpirationDaysStudio"
+              type="number"
+              min={0}
+              value={banner.behavior.consentExpirationDays}
+              onChange={(e) =>
+                setBanner({
+                  ...banner,
+                  behavior: { ...banner.behavior, consentExpirationDays: Number(e.target.value) },
+                })
+              }
+            />
+          </div>
+          <h4>Privacy trigger</h4>
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                checked={banner.privacyTrigger.enabled}
+                onChange={(e) =>
+                  setBanner({
+                    ...banner,
+                    privacyTrigger: { ...banner.privacyTrigger, enabled: e.target.checked },
+                  })
+                }
+              />{' '}
+              Show privacy trigger after consent
+            </label>
+          </div>
+          <div className="field">
+            <label htmlFor="privacyTriggerLabelStudio">Trigger label</label>
+            <input
+              id="privacyTriggerLabelStudio"
+              value={banner.privacyTrigger.label}
+              onChange={(e) =>
+                setBanner({
+                  ...banner,
+                  privacyTrigger: { ...banner.privacyTrigger, label: e.target.value },
+                })
+              }
+            />
+          </div>
+        </>
+      );
+    }
 
-      <div style={{ display: 'flex', gap: '0.5rem', margin: '1.5rem 0', flexWrap: 'wrap' }}>
-        {(['categories', 'banner', 'template', 'regional', 'policy', 'renewals'] as Tab[]).map((item) => (
-          <button
-            key={item}
-            className={tab === item ? 'btn' : 'btn btn-secondary'}
-            type="button"
-            onClick={() => setTab(item)}
-          >
-            {item === 'template'
-              ? 'Consent template'
-              : item === 'regional'
-                ? 'Geo & GCM'
-                : item.charAt(0).toUpperCase() + item.slice(1)}
-          </button>
-        ))}
-      </div>
+    if (pane === 'layout') {
+      return (
+        <>
+          <div className="field">
+            <label htmlFor="consentTemplateLayout">Consent Template</label>
+            <select
+              id="consentTemplateLayout"
+              value={consentTemplateId}
+              onChange={(e) => {
+                const value = e.target.value as ConsentTemplateId | '';
+                if (!value) {
+                  setConsentTemplateId('');
+                  return;
+                }
+                applyConsentTemplate(value);
+              }}
+            >
+              <option value="">Choose a template…</option>
+              {CONSENT_TEMPLATES.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="cy-banner-hint">
+            {selectedTemplate?.description ?? 'Choose a consent template to align layout defaults with local laws.'}
+          </p>
+          <h3>Layout</h3>
+          <div className="cy-banner-layout-grid">
+            {(
+              [
+                ['bottom_bar', 'Bottom bar'],
+                ['top_bar', 'Top bar'],
+                ['center_modal', 'Center'],
+                ['corner_popup', 'Corner'],
+                ['side_panel', 'Side panel'],
+                ['compact', 'Compact'],
+                ['multi_step_modal', 'Multi-step'],
+                ['fullscreen', 'Fullscreen'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={`cy-banner-layout-card${banner.layout === value ? ' active' : ''}`}
+                onClick={() => setBanner({ ...banner, layout: value })}
+              >
+                <span className={`cy-banner-layout-thumb cy-layout-${value}`} />
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
+      );
+    }
 
-      {tab === 'categories' && (
-        <div className="card">
+    if (pane === 'content') {
+      return (
+        <>
+          <div className="field">
+            <label htmlFor="consentTemplateContent">Consent Template</label>
+            <select
+              id="consentTemplateContent"
+              value={consentTemplateId}
+              onChange={(e) => {
+                const value = e.target.value as ConsentTemplateId | '';
+                if (!value) {
+                  setConsentTemplateId('');
+                  return;
+                }
+                applyConsentTemplate(value);
+              }}
+            >
+              <option value="">Choose a template…</option>
+              {CONSENT_TEMPLATES.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="cy-banner-hint">
+            {selectedTemplate?.description ??
+              'Edit the banner copy visitors see. Changes update the live preview instantly.'}
+          </p>
+          <h3>Content</h3>
+          <div className="field">
+            <label htmlFor="titleStudio">Title</label>
+            <input
+              id="titleStudio"
+              value={banner.title}
+              onChange={(e) => setBanner({ ...banner, title: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="descriptionStudio">Description ({banner.description.length}/2000)</label>
+            <textarea
+              id="descriptionStudio"
+              rows={7}
+              maxLength={2000}
+              value={banner.description}
+              onChange={(e) => setBanner({ ...banner, description: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="acceptButtonStudio">Accept button</label>
+            <input
+              id="acceptButtonStudio"
+              value={banner.acceptButton}
+              onChange={(e) => setBanner({ ...banner, acceptButton: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="rejectButtonStudio">Reject / Do Not Sell</label>
+            <input
+              id="rejectButtonStudio"
+              value={banner.rejectButton}
+              onChange={(e) => setBanner({ ...banner, rejectButton: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="preferencesButtonStudio">Customize button</label>
+            <input
+              id="preferencesButtonStudio"
+              value={banner.preferencesButton}
+              onChange={(e) => setBanner({ ...banner, preferencesButton: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="legalNoticeStudio">Legal notice</label>
+            <textarea
+              id="legalNoticeStudio"
+              rows={2}
+              value={banner.legalNotice}
+              onChange={(e) => setBanner({ ...banner, legalNotice: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="privacyPolicyUrlStudio">Privacy policy URL</label>
+            <input
+              id="privacyPolicyUrlStudio"
+              type="url"
+              value={banner.privacyPolicyUrl}
+              onChange={(e) => setBanner({ ...banner, privacyPolicyUrl: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="cookiePolicyUrlStudio">Cookie policy URL</label>
+            <input
+              id="cookiePolicyUrlStudio"
+              type="url"
+              value={banner.cookiePolicyUrl}
+              onChange={(e) => setBanner({ ...banner, cookiePolicyUrl: e.target.value })}
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (pane === 'colors') {
+      return (
+        <>
+          <div className="field">
+            <label htmlFor="consentTemplateColors">Consent Template</label>
+            <select
+              id="consentTemplateColors"
+              value={consentTemplateId}
+              onChange={(e) => {
+                const value = e.target.value as ConsentTemplateId | '';
+                if (!value) {
+                  setConsentTemplateId('');
+                  return;
+                }
+                applyConsentTemplate(value);
+              }}
+            >
+              <option value="">Choose a template…</option>
+              {CONSENT_TEMPLATES.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="cy-banner-hint">Adjust banner colors, buttons, and typography.</p>
+          <h3>Colors</h3>
+          <div className="cy-banner-color-row">
+            <div className="field">
+              <label htmlFor="primaryColorStudio">Primary</label>
+              <input
+                id="primaryColorStudio"
+                type="color"
+                value={banner.theme.primaryColor}
+                onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, primaryColor: e.target.value } })}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="backgroundColorStudio">Background</label>
+              <input
+                id="backgroundColorStudio"
+                type="color"
+                value={banner.theme.backgroundColor}
+                onChange={(e) =>
+                  setBanner({ ...banner, theme: { ...banner.theme, backgroundColor: e.target.value } })
+                }
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="textColorStudio">Text</label>
+              <input
+                id="textColorStudio"
+                type="color"
+                value={banner.theme.textColor}
+                onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, textColor: e.target.value } })}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="buttonTextColorStudio">Button text</label>
+              <input
+                id="buttonTextColorStudio"
+                type="color"
+                value={banner.theme.buttonTextColor}
+                onChange={(e) =>
+                  setBanner({ ...banner, theme: { ...banner.theme, buttonTextColor: e.target.value } })
+                }
+              />
+            </div>
+          </div>
+          <div className="field">
+            <label htmlFor="buttonStyleStudio">Button style</label>
+            <select
+              id="buttonStyleStudio"
+              value={banner.theme.buttonStyle}
+              onChange={(e) =>
+                setBanner({
+                  ...banner,
+                  theme: { ...banner.theme, buttonStyle: e.target.value as BannerState['theme']['buttonStyle'] },
+                })
+              }
+            >
+              <option value="filled">Filled</option>
+              <option value="outline">Outline</option>
+              <option value="soft">Soft</option>
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="borderRadiusStudio">Border radius</label>
+            <input
+              id="borderRadiusStudio"
+              value={banner.theme.borderRadius}
+              onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, borderRadius: e.target.value } })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="fontFamilyStudio">Font family</label>
+            <input
+              id="fontFamilyStudio"
+              value={banner.theme.fontFamily}
+              onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, fontFamily: e.target.value } })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="logoUrlStudio">Logo URL</label>
+            <input
+              id="logoUrlStudio"
+              type="url"
+              value={banner.theme.logoUrl}
+              onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, logoUrl: e.target.value } })}
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (pane === 'css') {
+      return (
+        <>
+          <div className="field">
+            <label htmlFor="consentTemplateCss">Consent Template</label>
+            <select
+              id="consentTemplateCss"
+              value={consentTemplateId}
+              onChange={(e) => {
+                const value = e.target.value as ConsentTemplateId | '';
+                if (!value) {
+                  setConsentTemplateId('');
+                  return;
+                }
+                applyConsentTemplate(value);
+              }}
+            >
+              <option value="">Choose a template…</option>
+              {CONSENT_TEMPLATES.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="cy-banner-hint">
+            {selectedTemplate?.description ?? 'Add custom CSS scoped to the banner preview.'}
+          </p>
+          <h3>Custom CSS</h3>
+          <div className="field">
+            <label htmlFor="customCssStudio">Add your custom css here</label>
+            <textarea
+              id="customCssStudio"
+              className="cy-banner-css"
+              rows={16}
+              maxLength={4000}
+              value={banner.theme.customCss}
+              onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, customCss: e.target.value } })}
+              placeholder={'.cmp-banner {\n  /* your styles */\n}'}
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (pane === 'categories') {
+      return (
+        <>
           <h3>Consent categories</h3>
           <form onSubmit={addCategory} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-            <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="Custom category name" required />
-            <button className="btn" type="submit">Add category</button>
+            <input
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              placeholder="Custom category name"
+              required
+            />
+            <button className="btn" type="submit">
+              Add
+            </button>
           </form>
           <table>
             <thead>
               <tr>
-                <th>Order</th>
                 <th>Name</th>
-                <th>Slug</th>
-                <th>Required</th>
                 <th>Enabled</th>
               </tr>
             </thead>
@@ -582,12 +1052,16 @@ export default function DomainConsentPage() {
               {categories.map((category, index) => (
                 <tr key={category.id}>
                   <td>
-                    <button className="btn btn-secondary" type="button" onClick={() => moveCategory(index, -1)}>↑</button>
-                    <button className="btn btn-secondary" type="button" onClick={() => moveCategory(index, 1)}>↓</button>
+                    <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                      <button className="btn btn-secondary" type="button" onClick={() => moveCategory(index, -1)}>
+                        ↑
+                      </button>
+                      <button className="btn btn-secondary" type="button" onClick={() => moveCategory(index, 1)}>
+                        ↓
+                      </button>
+                      <span>{category.name}</span>
+                    </div>
                   </td>
-                  <td>{category.name}</td>
-                  <td><code>{category.slug}</code></td>
-                  <td>{category.required ? 'Yes' : 'No'}</td>
                   <td>
                     <input
                       type="checkbox"
@@ -600,300 +1074,187 @@ export default function DomainConsentPage() {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
+        </>
+      );
+    }
 
-      {tab === 'banner' && (
-        <div className="grid-2">
-          <form className="card" onSubmit={saveBanner}>
-            <h3>Banner editor</h3>
-            <div className="field">
-              <label htmlFor="textTemplate">Text template</label>
-              <select
-                id="textTemplate"
-                value={textTemplate}
-                onChange={(e) => {
-                  setTextTemplate(e.target.value);
-                  if (e.target.value) applyTextTemplate(e.target.value);
-                }}
-              >
-                <option value="">Choose a template…</option>
-                {BANNER_TEXT_TEMPLATES.map((template) => (
-                  <option key={template.id} value={template.id}>{template.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="layout">Layout</label>
-              <select id="layout" value={banner.layout} onChange={(e) => setBanner({ ...banner, layout: e.target.value })}>
-                <option value="bottom_bar">Bottom bar</option>
-                <option value="top_bar">Top bar</option>
-                <option value="center_modal">Center modal</option>
-                <option value="multi_step_modal">Multi-step modal</option>
-                <option value="corner_popup">Corner popup</option>
-                <option value="fullscreen">Full-screen overlay</option>
-                <option value="side_panel">Side panel</option>
-                <option value="compact">Compact banner</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="contentFormat">Description format</label>
-              <select
-                id="contentFormat"
-                value={banner.contentFormat}
-                onChange={(e) => setBanner({ ...banner, contentFormat: e.target.value as BannerState['contentFormat'] })}
-              >
-                <option value="plain">Plain text</option>
-                <option value="basic_html">Basic HTML (strong, em, links, lists)</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="title">Title</label>
-              <input id="title" value={banner.title} onChange={(e) => setBanner({ ...banner, title: e.target.value })} required />
-            </div>
-            <div className="field">
-              <label htmlFor="description">Description ({banner.description.length}/2000)</label>
-              <textarea id="description" rows={4} maxLength={2000} value={banner.description} onChange={(e) => setBanner({ ...banner, description: e.target.value })} required />
-            </div>
-            <div className="field">
-              <label htmlFor="acceptButton">Accept button</label>
-              <input id="acceptButton" value={banner.acceptButton} onChange={(e) => setBanner({ ...banner, acceptButton: e.target.value })} />
-            </div>
-            <div className="field">
-              <label htmlFor="rejectButton">Reject button</label>
-              <input id="rejectButton" value={banner.rejectButton} onChange={(e) => setBanner({ ...banner, rejectButton: e.target.value })} />
-            </div>
-            <div className="field">
-              <label htmlFor="preferencesButton">Customize button</label>
-              <input id="preferencesButton" value={banner.preferencesButton} onChange={(e) => setBanner({ ...banner, preferencesButton: e.target.value })} />
-            </div>
-            <div className="field">
-              <label htmlFor="saveButton">Save preferences button</label>
-              <input id="saveButton" value={banner.saveButton} onChange={(e) => setBanner({ ...banner, saveButton: e.target.value })} />
-            </div>
-            <div className="field">
-              <label htmlFor="closeButton">Close button label</label>
-              <input id="closeButton" value={banner.closeButton} onChange={(e) => setBanner({ ...banner, closeButton: e.target.value })} />
-            </div>
-            <div className="field">
-              <label htmlFor="legalNotice">Legal notice</label>
-              <textarea id="legalNotice" rows={2} value={banner.legalNotice} onChange={(e) => setBanner({ ...banner, legalNotice: e.target.value })} />
-            </div>
-            <div className="field">
-              <label htmlFor="footerContent">Footer content</label>
-              <textarea id="footerContent" rows={2} value={banner.footerContent} onChange={(e) => setBanner({ ...banner, footerContent: e.target.value })} />
-            </div>
-            <div className="field">
-              <label htmlFor="privacyPolicyUrl">Privacy policy URL</label>
-              <input id="privacyPolicyUrl" type="url" value={banner.privacyPolicyUrl} onChange={(e) => setBanner({ ...banner, privacyPolicyUrl: e.target.value })} placeholder="https://example.com/privacy" />
-            </div>
-            <div className="field">
-              <label htmlFor="cookiePolicyUrl">Cookie policy URL</label>
-              <input id="cookiePolicyUrl" type="url" value={banner.cookiePolicyUrl} onChange={(e) => setBanner({ ...banner, cookiePolicyUrl: e.target.value })} placeholder="https://example.com/cookies" />
-            </div>
-            <h4 style={{ marginTop: '1.5rem' }}>Category copy overrides</h4>
-            {categories.map((category) => (
-              <div className="field" key={category.id}>
-                <label htmlFor={`cat-desc-${category.slug}`}>{category.name} description</label>
-                <textarea
-                  id={`cat-desc-${category.slug}`}
-                  rows={2}
-                  maxLength={500}
-                  value={banner.categoryDescriptions[category.slug] ?? ''}
-                  placeholder={category.description ?? 'Optional override shown in preferences'}
-                  onChange={(e) =>
-                    setBanner({
-                      ...banner,
-                      categoryDescriptions: {
-                        ...banner.categoryDescriptions,
-                        [category.slug]: e.target.value,
-                      },
-                    })
-                  }
-                />
-              </div>
+    if (pane === 'regional') {
+      return (
+        <>
+          <h3>Geo targeting</h3>
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                checked={Boolean(geoSettings.enabled)}
+                onChange={(e) => setGeoSettings({ ...geoSettings, enabled: e.target.checked })}
+              />{' '}
+              Enable regional rules
+            </label>
+          </div>
+          <div className="field">
+            <label htmlFor="defaultProfileId">Default profile</label>
+            <select
+              id="defaultProfileId"
+              value={geoSettings.defaultProfileId ?? 'generic_opt_in'}
+              onChange={(e) => setGeoSettings({ ...geoSettings, defaultProfileId: e.target.value })}
+            >
+              {REGULATION_PROFILE_OPTIONS.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            className="btn btn-secondary"
+            type="button"
+            onClick={() => setGeoSettings({ ...geoSettings, regionalRules: DEFAULT_REGIONAL_RULES })}
+          >
+            Reset default rules
+          </button>
+          <ul style={{ paddingLeft: '1.1rem', fontSize: '0.8125rem' }}>
+            {(geoSettings.regionalRules ?? []).map((rule) => (
+              <li key={rule.id} style={{ marginBottom: '0.35rem' }}>
+                <strong>{rule.name}</strong> →{' '}
+                {REGULATION_PROFILE_OPTIONS.find((p) => p.id === rule.profileId)?.name ?? rule.profileId}
+              </li>
             ))}
-            {vendorKeys.length > 0 && (
-              <>
-                <h4 style={{ marginTop: '1rem' }}>Vendor descriptions</h4>
-                {vendorKeys.map((vendorKey) => (
-                  <div className="field" key={vendorKey}>
-                    <label htmlFor={`vendor-desc-${vendorKey}`}>{vendorKey}</label>
-                    <textarea
-                      id={`vendor-desc-${vendorKey}`}
-                      rows={2}
-                      maxLength={500}
-                      value={banner.vendorDescriptions[vendorKey] ?? ''}
-                      onChange={(e) =>
-                        setBanner({
-                          ...banner,
-                          vendorDescriptions: {
-                            ...banner.vendorDescriptions,
-                            [vendorKey]: e.target.value,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                ))}
-              </>
-            )}
-            <h4 style={{ marginTop: '1.5rem' }}>Behavior</h4>
-            <div className="field">
-              <label><input type="checkbox" checked={banner.behavior.displayOnFirstVisit} onChange={(e) => setBanner({ ...banner, behavior: { ...banner.behavior, displayOnFirstVisit: e.target.checked } })} /> Display on first visit</label>
-            </div>
-            <div className="field">
-              <label><input type="checkbox" checked={banner.behavior.displayWhenPolicyChanges} onChange={(e) => setBanner({ ...banner, behavior: { ...banner.behavior, displayWhenPolicyChanges: e.target.checked } })} /> Display when policy changes</label>
-            </div>
-            <div className="field">
-              <label><input type="checkbox" checked={banner.behavior.displayAfterConsentExpires} onChange={(e) => setBanner({ ...banner, behavior: { ...banner.behavior, displayAfterConsentExpires: e.target.checked } })} /> Re-show after consent expires</label>
-            </div>
-            <div className="field">
-              <label><input type="checkbox" checked={banner.behavior.rememberChoice} onChange={(e) => setBanner({ ...banner, behavior: { ...banner.behavior, rememberChoice: e.target.checked } })} /> Remember visitor choice</label>
-            </div>
-            <div className="field">
-              <label><input type="checkbox" checked={banner.behavior.allowClose} onChange={(e) => setBanner({ ...banner, behavior: { ...banner.behavior, allowClose: e.target.checked } })} /> Allow close without choosing</label>
-            </div>
-            <div className="field">
-              <label><input type="checkbox" checked={banner.behavior.blockInteractionUntilChoice} onChange={(e) => setBanner({ ...banner, behavior: { ...banner.behavior, blockInteractionUntilChoice: e.target.checked } })} /> Block interaction until choice</label>
-            </div>
-            <div className="field">
-              <label><input type="checkbox" checked={banner.behavior.displayAfterInteraction} onChange={(e) => setBanner({ ...banner, behavior: { ...banner.behavior, displayAfterInteraction: e.target.checked } })} /> Display after first user interaction</label>
-            </div>
-            <div className="field">
-              <label><input type="checkbox" checked={banner.behavior.respectGlobalPrivacyControl} onChange={(e) => setBanner({ ...banner, behavior: { ...banner.behavior, respectGlobalPrivacyControl: e.target.checked } })} /> Respect Global Privacy Control (GPC)</label>
-            </div>
-            <div className="field">
-              <label htmlFor="displayDelayMs">Display delay (ms)</label>
-              <input id="displayDelayMs" type="number" min={0} value={banner.behavior.displayDelayMs} onChange={(e) => setBanner({ ...banner, behavior: { ...banner.behavior, displayDelayMs: Number(e.target.value) } })} />
-            </div>
-            <div className="field">
-              <label htmlFor="displayAfterScrollPercent">Display after scroll (%)</label>
-              <input id="displayAfterScrollPercent" type="number" min={0} max={100} value={banner.behavior.displayAfterScrollPercent} onChange={(e) => setBanner({ ...banner, behavior: { ...banner.behavior, displayAfterScrollPercent: Number(e.target.value) } })} />
-            </div>
-            <div className="field">
-              <label htmlFor="showOnPages">Show only on pages (comma-separated paths)</label>
-              <input id="showOnPages" value={banner.behavior.showOnPages} onChange={(e) => setBanner({ ...banner, behavior: { ...banner.behavior, showOnPages: e.target.value } })} placeholder="/, /products/*" />
-            </div>
-            <div className="field">
-              <label htmlFor="excludePages">Exclude pages (comma-separated paths)</label>
-              <input id="excludePages" value={banner.behavior.excludePages} onChange={(e) => setBanner({ ...banner, behavior: { ...banner.behavior, excludePages: e.target.value } })} placeholder="/admin, /checkout/*" />
-            </div>
-            <div className="field">
-              <label htmlFor="consentExpirationDays">Consent expiration (days)</label>
-              <input id="consentExpirationDays" type="number" min={0} value={banner.behavior.consentExpirationDays} onChange={(e) => setBanner({ ...banner, behavior: { ...banner.behavior, consentExpirationDays: Number(e.target.value) } })} />
-            </div>
-            <h4 style={{ marginTop: '1.5rem' }}>Theme</h4>
-            <div className="field">
-              <label htmlFor="primaryColor">Primary color</label>
-              <input id="primaryColor" type="color" value={banner.theme.primaryColor} onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, primaryColor: e.target.value } })} />
-            </div>
-            <div className="field">
-              <label htmlFor="backgroundColor">Background color</label>
-              <input id="backgroundColor" type="color" value={banner.theme.backgroundColor} onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, backgroundColor: e.target.value } })} />
-            </div>
-            <div className="field">
-              <label htmlFor="textColor">Text color</label>
-              <input id="textColor" type="color" value={banner.theme.textColor} onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, textColor: e.target.value } })} />
-            </div>
-            <div className="field">
-              <label htmlFor="buttonTextColor">Button text color</label>
-              <input id="buttonTextColor" type="color" value={banner.theme.buttonTextColor} onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, buttonTextColor: e.target.value } })} />
-            </div>
-            <div className="field">
-              <label htmlFor="borderRadius">Border radius</label>
-              <input id="borderRadius" value={banner.theme.borderRadius} onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, borderRadius: e.target.value } })} placeholder="8px" />
-            </div>
-            <div className="field">
-              <label htmlFor="buttonStyle">Button style</label>
-              <select id="buttonStyle" value={banner.theme.buttonStyle} onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, buttonStyle: e.target.value as BannerState['theme']['buttonStyle'] } })}>
-                <option value="filled">Filled</option>
-                <option value="outline">Outline</option>
-                <option value="soft">Soft</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="fontFamily">Font family</label>
-              <input id="fontFamily" value={banner.theme.fontFamily} onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, fontFamily: e.target.value } })} />
-            </div>
-            <div className="field">
-              <label htmlFor="fontSize">Font size</label>
-              <input id="fontSize" value={banner.theme.fontSize} onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, fontSize: e.target.value } })} placeholder="16px" />
-            </div>
-            <div className="field">
-              <label htmlFor="spacing">Spacing</label>
-              <input id="spacing" value={banner.theme.spacing} onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, spacing: e.target.value } })} placeholder="1rem" />
-            </div>
-            <div className="field">
-              <label htmlFor="shadow">Shadow</label>
-              <input id="shadow" value={banner.theme.shadow} onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, shadow: e.target.value } })} />
-            </div>
-            <div className="field">
-              <label htmlFor="overlayOpacity">Overlay opacity ({banner.theme.overlayOpacity})</label>
-              <input id="overlayOpacity" type="range" min={0} max={1} step={0.05} value={banner.theme.overlayOpacity} onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, overlayOpacity: Number(e.target.value) } })} />
-            </div>
-            <div className="field">
-              <label htmlFor="logoUrl">Logo URL</label>
-              <input id="logoUrl" type="url" value={banner.theme.logoUrl} onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, logoUrl: e.target.value } })} placeholder="https://example.com/logo.png" />
-            </div>
-            <div className="field">
-              <label htmlFor="customCss">Custom CSS (banner only)</label>
-              <textarea id="customCss" rows={4} maxLength={4000} value={banner.theme.customCss} onChange={(e) => setBanner({ ...banner, theme: { ...banner.theme, customCss: e.target.value } })} placeholder="border-width: 2px;" />
-            </div>
-            <h4 style={{ marginTop: '1.5rem' }}>Privacy trigger</h4>
-            <div className="field">
-              <label><input type="checkbox" checked={banner.privacyTrigger.enabled} onChange={(e) => setBanner({ ...banner, privacyTrigger: { ...banner.privacyTrigger, enabled: e.target.checked } })} /> Show privacy trigger after consent</label>
-            </div>
-            <div className="field">
-              <label htmlFor="privacyTriggerMode">Trigger mode</label>
-              <select id="privacyTriggerMode" value={banner.privacyTrigger.mode} onChange={(e) => setBanner({ ...banner, privacyTrigger: { ...banner.privacyTrigger, mode: e.target.value as BannerState['privacyTrigger']['mode'] } })}>
-                <option value="floating_icon">Floating icon</option>
-                <option value="footer_link">Footer link</option>
-                <option value="api_only">API only</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="privacyTriggerLabel">Trigger label</label>
-              <input id="privacyTriggerLabel" value={banner.privacyTrigger.label} onChange={(e) => setBanner({ ...banner, privacyTrigger: { ...banner.privacyTrigger, label: e.target.value } })} />
-            </div>
-            <div className="field">
-              <label htmlFor="privacyTriggerPosition">Floating position</label>
-              <select id="privacyTriggerPosition" value={banner.privacyTrigger.position} onChange={(e) => setBanner({ ...banner, privacyTrigger: { ...banner.privacyTrigger, position: e.target.value as BannerState['privacyTrigger']['position'] } })}>
-                <option value="bottom-right">Bottom right</option>
-                <option value="bottom-left">Bottom left</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="footerSelector">Footer link selector</label>
-              <input id="footerSelector" value={banner.privacyTrigger.footerSelector} onChange={(e) => setBanner({ ...banner, privacyTrigger: { ...banner.privacyTrigger, footerSelector: e.target.value } })} placeholder="footer .legal-links" />
-            </div>
-            <button className="btn" type="submit" disabled={publishing}>Save draft</button>
-            <button className="btn" type="button" style={{ marginLeft: '0.5rem' }} onClick={publishDraft} disabled={publishing}>
-              {publishing ? 'Publishing…' : 'Publish'}
-            </button>
-            <Link className="btn btn-secondary" href={`/websites/${domainId}/test-banner`} style={{ marginLeft: '0.5rem' }}>
-              Test live banner
-            </Link>
-            {(message || error) && (
-              <p
-                className={error ? 'error' : 'success'}
-                style={{ marginTop: '1rem', fontWeight: 500 }}
-                role="status"
-              >
-                {error || message}
-              </p>
-            )}
-          </form>
+          </ul>
+          <h4>Google Consent Mode</h4>
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                checked={googleConsentMode.enabled}
+                onChange={(e) => setGoogleConsentMode({ ...googleConsentMode, enabled: e.target.checked })}
+              />{' '}
+              Enable GCM
+            </label>
+          </div>
+          <div className="field">
+            <label htmlFor="gcmMode">Mode</label>
+            <select
+              id="gcmMode"
+              value={googleConsentMode.mode}
+              onChange={(e) =>
+                setGoogleConsentMode({
+                  ...googleConsentMode,
+                  mode: e.target.value as GoogleConsentModeConfig['mode'],
+                })
+              }
+            >
+              <option value="advanced">Advanced</option>
+              <option value="basic">Basic</option>
+            </select>
+          </div>
+          <button className="btn" type="button" onClick={saveRegulationSettings}>
+            Save geo &amp; GCM
+          </button>
+        </>
+      );
+    }
 
-          <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3>Live preview</h3>
-              <select value={previewViewport} onChange={(e) => setPreviewViewport(e.target.value as typeof previewViewport)}>
-                <option value="desktop">Desktop</option>
-                <option value="tablet">Tablet</option>
-                <option value="mobile">Mobile</option>
-              </select>
-            </div>
+    if (pane === 'policy') {
+      return (
+        <>
+          <h3>Policy versions</h3>
+          <div className="field">
+            <label htmlFor="scheduleAt">Schedule publish</label>
+            <input
+              id="scheduleAt"
+              type="datetime-local"
+              value={scheduleAt}
+              onChange={(e) => setScheduleAt(e.target.value)}
+            />
+          </div>
+          <button className="btn btn-secondary" type="button" onClick={scheduleDraft}>
+            Schedule draft
+          </button>
+          <table style={{ marginTop: '1rem' }}>
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {policies.map((policy) => (
+                <tr key={policy.id}>
+                  <td>v{policy.versionNumber}</td>
+                  <td>{policy.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Link className="btn btn-secondary" href={`/websites/${domainId}/test-banner`} style={{ marginTop: '1rem' }}>
+            Test live banner
+          </Link>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <h3>Consent renewal</h3>
+        <div className="field">
+          <label htmlFor="renewalReason">Reason</label>
+          <select id="renewalReason" value={renewalReason} onChange={(e) => setRenewalReason(e.target.value)}>
+            <option value="policy_materially_changed">Policy materially changed</option>
+            <option value="new_vendor_added">New vendor added</option>
+            <option value="admin_requested">Administrator requested</option>
+            <option value="regulation_changed">Regulation changed</option>
+          </select>
+        </div>
+        <button className="btn" type="button" onClick={triggerRenewal}>
+          Trigger renewal
+        </button>
+        <table style={{ marginTop: '1rem' }}>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {renewals.length === 0 ? (
+              <tr>
+                <td colSpan={2} style={{ color: 'var(--muted)' }}>
+                  No renewals yet
+                </td>
+              </tr>
+            ) : (
+              renewals.map((renewal) => (
+                <tr key={renewal.id}>
+                  <td>{new Date(renewal.createdAt).toLocaleString()}</td>
+                  <td>{renewal.reason}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </>
+    );
+  }
+
+  return (
+    <ProtectedLayout>
+      <WebsiteLayout domainId={domainId} hostname={hostname || undefined}>
+        <BannerStudio
+          pane={pane}
+          onPaneChange={setPane}
+          canPublish={Boolean(draft)}
+          publishing={publishing}
+          onPublish={publishDraft}
+          onSaveDraft={() => {
+            void saveConsentTemplateAndBanner();
+          }}
+          viewport={previewViewport}
+          onViewportChange={setPreviewViewport}
+          status={message}
+          error={error}
+          panel={renderPanel()}
+          preview={
             <BannerPreview
               title={banner.title}
               description={banner.description}
@@ -910,294 +1271,12 @@ export default function DomainConsentPage() {
               layout={banner.layout}
               theme={banner.theme}
               viewport={previewViewport}
+              websiteUrl={hostname || null}
+              variant="studio"
+              allowClose={banner.behavior.allowClose}
             />
-          </div>
-        </div>
-      )}
-
-      {tab === 'template' && (
-        <div className="card">
-          <h3>Consent template</h3>
-          <p className="website-section-muted" style={{ marginTop: 0 }}>
-            Choose a law profile like CookieYes. This sets geo rules, GPC, and suggested banner copy.
-            Publish the policy afterward so the live SDK receives the update.
-          </p>
-          <div className="field">
-            <label htmlFor="consentTemplate">Template</label>
-            <select
-              id="consentTemplate"
-              value={consentTemplateId}
-              onChange={(e) => {
-                const value = e.target.value as ConsentTemplateId | '';
-                if (!value) {
-                  setConsentTemplateId('');
-                  return;
-                }
-                applyConsentTemplate(value);
-              }}
-            >
-              <option value="">Choose a consent template…</option>
-              {CONSENT_TEMPLATES.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          {consentTemplateId && (
-            <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
-              {CONSENT_TEMPLATES.find((item) => item.id === consentTemplateId)?.description}
-            </p>
-          )}
-          <button className="btn" type="button" onClick={saveConsentTemplateAndBanner}>
-            Save template to draft
-          </button>
-          {(message || error) && (
-            <p className={error ? 'error' : 'success'} style={{ marginTop: '1rem' }} role="status">
-              {error || message}
-            </p>
-          )}
-        </div>
-      )}
-
-      {tab === 'regional' && (
-        <div>
-          <div className="card" style={{ marginBottom: '1.5rem' }}>
-            <h3>Geo targeting &amp; regulation profiles</h3>
-            <p className="website-section-muted" style={{ marginTop: 0 }}>
-              Regional rules map visitor country/region to opt-in (GDPR) or opt-out (CCPA/US) behavior.
-              California uses country <code>US</code> + region <code>CA</code>.
-            </p>
-            <div className="field">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={Boolean(geoSettings.enabled)}
-                  onChange={(e) => setGeoSettings({ ...geoSettings, enabled: e.target.checked })}
-                />
-                Enable regional rules for this policy
-              </label>
-            </div>
-            <div className="field">
-              <label htmlFor="defaultProfileId">Default profile (no rule match)</label>
-              <select
-                id="defaultProfileId"
-                value={geoSettings.defaultProfileId ?? 'generic_opt_in'}
-                onChange={(e) => setGeoSettings({ ...geoSettings, defaultProfileId: e.target.value })}
-              >
-                {REGULATION_PROFILE_OPTIONS.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button
-              className="btn btn-secondary"
-              type="button"
-              onClick={() => setGeoSettings({ ...geoSettings, regionalRules: DEFAULT_REGIONAL_RULES })}
-            >
-              Reset to default regional rules
-            </button>
-            <table style={{ marginTop: '1.5rem' }}>
-              <thead>
-                <tr>
-                  <th>Rule</th>
-                  <th>Conditions</th>
-                  <th>Profile</th>
-                  <th>Priority</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(geoSettings.regionalRules ?? []).map((rule) => (
-                  <tr key={rule.id}>
-                    <td>{rule.name}</td>
-                    <td>
-                      <code>
-                        {(
-                          rule.conditions.countryGroups ??
-                          rule.conditions.countries ??
-                          []
-                        ).join(', ') || '—'}
-                        {rule.conditions.regions?.length
-                          ? ` / region ${rule.conditions.regions.join(',')}`
-                          : ''}
-                      </code>
-                    </td>
-                    <td>
-                      {REGULATION_PROFILE_OPTIONS.find((p) => p.id === rule.profileId)?.name ??
-                        rule.profileId}
-                    </td>
-                    <td>{rule.priority}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <button className="btn" type="button" style={{ marginTop: '1rem' }} onClick={saveRegulationSettings}>
-              Save geo &amp; GCM settings
-            </button>
-          </div>
-
-          <div className="card">
-            <h3>Google Consent Mode</h3>
-            <p className="website-section-muted" style={{ marginTop: 0 }}>
-              Configure Consent Mode v2 defaults emitted by the CMP. Load the CMP snippet before GTM/gtag.
-            </p>
-            <div className="field">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={googleConsentMode.enabled}
-                  onChange={(e) =>
-                    setGoogleConsentMode({ ...googleConsentMode, enabled: e.target.checked })
-                  }
-                />
-                Enable Google Consent Mode
-              </label>
-            </div>
-            <div className="field">
-              <label htmlFor="gcmMode">Mode</label>
-              <select
-                id="gcmMode"
-                value={googleConsentMode.mode}
-                onChange={(e) =>
-                  setGoogleConsentMode({
-                    ...googleConsentMode,
-                    mode: e.target.value as GoogleConsentModeConfig['mode'],
-                  })
-                }
-              >
-                <option value="advanced">Advanced (denied defaults, tags load with limited data)</option>
-                <option value="basic">Basic (block tags until consent)</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="gcmWaitForUpdate">Wait for update (ms)</label>
-              <input
-                id="gcmWaitForUpdate"
-                type="number"
-                min={0}
-                max={5000}
-                value={googleConsentMode.waitForUpdate}
-                onChange={(e) =>
-                  setGoogleConsentMode({
-                    ...googleConsentMode,
-                    waitForUpdate: Number(e.target.value),
-                  })
-                }
-              />
-            </div>
-            <div className="field">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={googleConsentMode.adsDataRedaction}
-                  onChange={(e) =>
-                    setGoogleConsentMode({
-                      ...googleConsentMode,
-                      adsDataRedaction: e.target.checked,
-                    })
-                  }
-                />
-                Ads data redaction
-              </label>
-            </div>
-            <div className="field">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={googleConsentMode.urlPassthrough}
-                  onChange={(e) =>
-                    setGoogleConsentMode({
-                      ...googleConsentMode,
-                      urlPassthrough: e.target.checked,
-                    })
-                  }
-                />
-                URL passthrough
-              </label>
-            </div>
-            <button className="btn" type="button" onClick={saveRegulationSettings}>
-              Save geo &amp; GCM settings
-            </button>
-            {(message || error) && (
-              <p className={error ? 'error' : 'success'} style={{ marginTop: '1rem' }} role="status">
-                {error || message}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {tab === 'policy' && (
-        <div className="card">
-          <h3>Policy versions</h3>
-          <div className="field" style={{ marginTop: '1rem' }}>
-            <label htmlFor="scheduleAt">Schedule publish</label>
-            <input id="scheduleAt" type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
-          </div>
-          <button className="btn btn-secondary" type="button" onClick={scheduleDraft}>Schedule current draft</button>
-          <table style={{ marginTop: '1.5rem' }}>
-            <thead>
-              <tr>
-                <th>Version</th>
-                <th>Status</th>
-                <th>Published</th>
-                <th>Renewal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {policies.map((policy) => (
-                <tr key={policy.id}>
-                  <td>v{policy.versionNumber}</td>
-                  <td>{policy.status}</td>
-                  <td>{policy.publishedAt ? new Date(policy.publishedAt).toLocaleString() : '—'}</td>
-                  <td>{policy.requiresRenewal ? 'Required' : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {tab === 'renewals' && (
-        <div className="card">
-          <h3>Consent renewal</h3>
-          <div className="field">
-            <label htmlFor="renewalReason">Reason</label>
-            <select id="renewalReason" value={renewalReason} onChange={(e) => setRenewalReason(e.target.value)}>
-              <option value="policy_materially_changed">Policy materially changed</option>
-              <option value="new_vendor_added">New vendor added</option>
-              <option value="new_consent_purpose">New consent purpose</option>
-              <option value="consent_expired">Consent expired</option>
-              <option value="regulation_changed">Regulation changed</option>
-              <option value="admin_requested">Administrator requested</option>
-              <option value="consent_before_date">Consent before date</option>
-            </select>
-          </div>
-          <button className="btn" type="button" onClick={triggerRenewal}>Trigger renewal</button>
-          <table style={{ marginTop: '1.5rem' }}>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Reason</th>
-                <th>Scope</th>
-              </tr>
-            </thead>
-            <tbody>
-              {renewals.length === 0 ? (
-                <tr><td colSpan={3} style={{ color: 'var(--muted)' }}>No renewals yet</td></tr>
-              ) : renewals.map((renewal) => (
-                <tr key={renewal.id}>
-                  <td>{new Date(renewal.createdAt).toLocaleString()}</td>
-                  <td>{renewal.reason}</td>
-                  <td>{renewal.scope}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+          }
+        />
       </WebsiteLayout>
     </ProtectedLayout>
   );
