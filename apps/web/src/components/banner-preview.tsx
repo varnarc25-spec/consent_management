@@ -10,7 +10,7 @@ export interface BannerPreviewProps {
   acceptButton: string;
   rejectButton: string;
   preferencesButton: string;
-  saveButton: string;
+  saveButton?: string;
   closeButton?: string;
   legalNotice?: string;
   footerContent?: string;
@@ -140,6 +140,7 @@ export function BannerPreview({
   return (
     <div
       className={isStudio ? 'cy-preview-studio' : undefined}
+      data-viewport={isStudio ? viewport : undefined}
       style={
         isStudio
           ? undefined
@@ -171,17 +172,19 @@ export function BannerPreview({
       ) : null}
       <div
         className={isStudio ? 'cy-preview-frame' : undefined}
-        style={{
-          position: 'relative',
-          height: isStudio ? '100%' : frameHeight,
-          width: '100%',
-          maxWidth: frameWidth ?? '100%',
-          margin: '0 auto',
-          background: resolvedUrl ? '#fff' : 'linear-gradient(180deg,#eef2ff,#f8fafc)',
-          overflow: 'hidden',
-          boxShadow: isStudio && viewport !== 'desktop' ? '0 12px 40px rgba(15,23,42,.18)' : undefined,
-          borderRadius: isStudio && viewport !== 'desktop' ? 12 : undefined,
-        }}
+        style={
+          isStudio
+            ? undefined
+            : {
+                position: 'relative',
+                height: frameHeight,
+                width: '100%',
+                maxWidth: frameWidth ?? '100%',
+                margin: '0 auto',
+                background: resolvedUrl ? '#fff' : 'linear-gradient(180deg,#eef2ff,#f8fafc)',
+                overflow: 'hidden',
+              }
+        }
       >
         {resolvedUrl ? (
           <>
@@ -260,7 +263,7 @@ export function BannerPreview({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={theme.logoUrl} alt="" style={{ display: 'block', maxHeight: 40, marginBottom: '.75rem' }} />
           ) : null}
-          {allowClose || closeButton ? (
+          {isStudio || allowClose || closeButton ? (
             <button
               type="button"
               aria-label={closeButton || 'Close'}

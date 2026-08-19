@@ -144,95 +144,97 @@ export function BannerStudio({
 }) {
   return (
     <div className="cy-banner-studio">
-      <nav className="cy-banner-rail" aria-label="Banner editor">
-        {PRIMARY.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={pane === item.id ? 'active' : undefined}
-            aria-current={pane === item.id ? 'page' : undefined}
-            aria-label={item.label}
-            title={item.label}
-            onClick={() => onPaneChange(item.id)}
-          >
-            {item.icon}
-            <span>{item.label}</span>
-          </button>
-        ))}
-        <div className="cy-banner-rail-divider" />
-        {SECONDARY.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={pane === item.id ? 'active' : undefined}
-            aria-current={pane === item.id ? 'page' : undefined}
-            aria-label={item.label}
-            title={item.label}
-            onClick={() => onPaneChange(item.id)}
-          >
-            {item.icon}
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </nav>
+      <div className="cy-banner-sidebar">
+        <nav className="cy-banner-rail" aria-label="Banner editor">
+          {PRIMARY.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={pane === item.id ? 'active' : undefined}
+              aria-current={pane === item.id ? 'page' : undefined}
+              aria-label={item.label}
+              title={item.label}
+              onClick={() => onPaneChange(item.id)}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          ))}
+          <div className="cy-banner-rail-divider" />
+          {SECONDARY.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={pane === item.id ? 'active' : undefined}
+              aria-current={pane === item.id ? 'page' : undefined}
+              aria-label={item.label}
+              title={item.label}
+              onClick={() => onPaneChange(item.id)}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
 
-      <aside className="cy-banner-panel">
-        <div className="cy-banner-panel-body">{panel}</div>
-        <div className="cy-banner-panel-footer">
-          {error ? (
-            <p className="error" role="status">
-              {error}
-            </p>
-          ) : status ? (
-            <p className="success" role="status">
-              {status}
-            </p>
-          ) : null}
-          <button
-            className="cy-banner-publish"
-            type="button"
-            disabled={!canPublish || publishing}
-            onClick={onPublish}
-          >
-            {publishing ? 'Publishing…' : 'Publish Changes'}
-          </button>
-          <button className="cy-banner-save" type="button" disabled={publishing} onClick={onSaveDraft}>
-            Save draft
-          </button>
-          <div className="cy-banner-devices" role="group" aria-label="Preview size">
-            {(['desktop', 'tablet', 'mobile'] as const).map((size) => (
-              <button
-                key={size}
-                type="button"
-                className={viewport === size ? 'active' : undefined}
-                aria-pressed={viewport === size}
-                aria-label={size}
-                onClick={() => onViewportChange(size)}
-              >
-                {size === 'desktop' ? (
-                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                    <path fill="currentColor" d="M4 5h16v11H4V5Zm-1 13h18v2H3v-2Z" />
-                  </svg>
-                ) : size === 'tablet' ? (
-                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                    <path
-                      fill="currentColor"
-                      d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm6 16.25a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"
-                    />
-                  </svg>
-                ) : (
-                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                    <path
-                      fill="currentColor"
-                      d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm4 18.2a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"
-                    />
-                  </svg>
-                )}
-              </button>
-            ))}
+        <aside className="cy-banner-panel">
+          <div className="cy-banner-panel-body">{panel}</div>
+          <div className="cy-banner-panel-footer">
+            {error ? (
+              <p className="error" role="status">
+                {error}
+              </p>
+            ) : status ? (
+              <p className="success" role="status">
+                {status}
+              </p>
+            ) : null}
+            <button
+              className="cy-banner-publish"
+              type="button"
+              disabled={!canPublish || publishing}
+              onClick={onPublish}
+            >
+              {publishing ? 'Publishing…' : 'Publish Changes'}
+            </button>
+            <button className="cy-banner-save" type="button" disabled={publishing} onClick={onSaveDraft}>
+              Save draft
+            </button>
+            <div className="cy-banner-devices" role="group" aria-label="Preview size">
+              {(['desktop', 'tablet', 'mobile'] as const).map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  className={viewport === size ? 'active' : undefined}
+                  aria-pressed={viewport === size}
+                  aria-label={size}
+                  onClick={() => onViewportChange(size)}
+                >
+                  {size === 'desktop' ? (
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                      <path fill="currentColor" d="M4 5h16v11H4V5Zm-1 13h18v2H3v-2Z" />
+                    </svg>
+                  ) : size === 'tablet' ? (
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                      <path
+                        fill="currentColor"
+                        d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm6 16.25a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"
+                      />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                      <path
+                        fill="currentColor"
+                        d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm4 18.2a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"
+                      />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      </aside>
+        </aside>
+      </div>
 
       <section className="cy-banner-stage" aria-label="Banner preview">
         {preview}
