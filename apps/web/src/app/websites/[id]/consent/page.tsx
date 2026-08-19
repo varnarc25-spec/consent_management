@@ -257,7 +257,7 @@ function serializeBanner(banner: BannerState) {
 export default function DomainConsentPage() {
   const params = useParams();
   const domainId = params.id as string;
-  const [pane, setPane] = useState<BannerStudioPane>('content');
+  const [pane, setPane] = useState<BannerStudioPane>('general');
   const [categories, setCategories] = useState<Category[]>([]);
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [draft, setDraft] = useState<Policy | null>(null);
@@ -570,7 +570,6 @@ export default function DomainConsentPage() {
             {selectedTemplate?.description ??
               'Pick GDPR, US State Laws, or both to set geo rules and suggested banner copy.'}
           </p>
-          <h3>General</h3>
           <div className="field">
             <label htmlFor="textTemplateStudio">Text template</label>
             <select
@@ -581,7 +580,7 @@ export default function DomainConsentPage() {
                 if (e.target.value) applyTextTemplate(e.target.value);
               }}
             >
-              <option value="">Choose a template…</option>
+              <option value="">Keep current copy</option>
               {BANNER_TEXT_TEMPLATES.map((template) => (
                 <option key={template.id} value={template.id}>
                   {template.label}
@@ -589,48 +588,39 @@ export default function DomainConsentPage() {
               ))}
             </select>
           </div>
-          <div className="field">
-            <label>
-              <input
-                type="checkbox"
-                checked={banner.behavior.displayOnFirstVisit}
-                onChange={(e) =>
-                  setBanner({ ...banner, behavior: { ...banner.behavior, displayOnFirstVisit: e.target.checked } })
-                }
-              />{' '}
-              Display on first visit
-            </label>
+        </>
+      );
+    }
+
+    if (pane === 'layout') {
+      return (
+        <>
+          <h3>Layout</h3>
+          <div className="cy-banner-layout-grid">
+            {(
+              [
+                ['bottom_bar', 'Bottom bar'],
+                ['top_bar', 'Top bar'],
+                ['center_modal', 'Center'],
+                ['corner_popup', 'Corner'],
+                ['side_panel', 'Side panel'],
+                ['compact', 'Compact'],
+                ['multi_step_modal', 'Multi-step'],
+                ['fullscreen', 'Fullscreen'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={`cy-banner-layout-card${banner.layout === value ? ' active' : ''}`}
+                onClick={() => setBanner({ ...banner, layout: value })}
+              >
+                <span className={`cy-banner-layout-thumb cy-layout-${value}`} />
+                {label}
+              </button>
+            ))}
           </div>
-          <div className="field">
-            <label>
-              <input
-                type="checkbox"
-                checked={banner.behavior.displayWhenPolicyChanges}
-                onChange={(e) =>
-                  setBanner({
-                    ...banner,
-                    behavior: { ...banner.behavior, displayWhenPolicyChanges: e.target.checked },
-                  })
-                }
-              />{' '}
-              Display when policy changes
-            </label>
-          </div>
-          <div className="field">
-            <label>
-              <input
-                type="checkbox"
-                checked={banner.behavior.respectGlobalPrivacyControl}
-                onChange={(e) =>
-                  setBanner({
-                    ...banner,
-                    behavior: { ...banner.behavior, respectGlobalPrivacyControl: e.target.checked },
-                  })
-                }
-              />{' '}
-              Respect Global Privacy Control (GPC)
-            </label>
-          </div>
+          <h4>Behavior</h4>
           <div className="field">
             <label>
               <input
@@ -659,105 +649,19 @@ export default function DomainConsentPage() {
             </label>
           </div>
           <div className="field">
-            <label htmlFor="consentExpirationDaysStudio">Consent expiration (days)</label>
-            <input
-              id="consentExpirationDaysStudio"
-              type="number"
-              min={0}
-              value={banner.behavior.consentExpirationDays}
-              onChange={(e) =>
-                setBanner({
-                  ...banner,
-                  behavior: { ...banner.behavior, consentExpirationDays: Number(e.target.value) },
-                })
-              }
-            />
-          </div>
-          <h4>Privacy trigger</h4>
-          <div className="field">
             <label>
               <input
                 type="checkbox"
-                checked={banner.privacyTrigger.enabled}
+                checked={banner.behavior.respectGlobalPrivacyControl}
                 onChange={(e) =>
                   setBanner({
                     ...banner,
-                    privacyTrigger: { ...banner.privacyTrigger, enabled: e.target.checked },
+                    behavior: { ...banner.behavior, respectGlobalPrivacyControl: e.target.checked },
                   })
                 }
               />{' '}
-              Show privacy trigger after consent
+              Respect Global Privacy Control (GPC)
             </label>
-          </div>
-          <div className="field">
-            <label htmlFor="privacyTriggerLabelStudio">Trigger label</label>
-            <input
-              id="privacyTriggerLabelStudio"
-              value={banner.privacyTrigger.label}
-              onChange={(e) =>
-                setBanner({
-                  ...banner,
-                  privacyTrigger: { ...banner.privacyTrigger, label: e.target.value },
-                })
-              }
-            />
-          </div>
-        </>
-      );
-    }
-
-    if (pane === 'layout') {
-      return (
-        <>
-          <div className="field">
-            <label htmlFor="consentTemplateLayout">Consent Template</label>
-            <select
-              id="consentTemplateLayout"
-              value={consentTemplateId}
-              onChange={(e) => {
-                const value = e.target.value as ConsentTemplateId | '';
-                if (!value) {
-                  setConsentTemplateId('');
-                  return;
-                }
-                applyConsentTemplate(value);
-              }}
-            >
-              <option value="">Choose a template…</option>
-              {CONSENT_TEMPLATES.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <p className="cy-banner-hint">
-            {selectedTemplate?.description ?? 'Choose a consent template to align layout defaults with local laws.'}
-          </p>
-          <h3>Layout</h3>
-          <div className="cy-banner-layout-grid">
-            {(
-              [
-                ['bottom_bar', 'Bottom bar'],
-                ['top_bar', 'Top bar'],
-                ['center_modal', 'Center'],
-                ['corner_popup', 'Corner'],
-                ['side_panel', 'Side panel'],
-                ['compact', 'Compact'],
-                ['multi_step_modal', 'Multi-step'],
-                ['fullscreen', 'Fullscreen'],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                className={`cy-banner-layout-card${banner.layout === value ? ' active' : ''}`}
-                onClick={() => setBanner({ ...banner, layout: value })}
-              >
-                <span className={`cy-banner-layout-thumb cy-layout-${value}`} />
-                {label}
-              </button>
-            ))}
           </div>
         </>
       );
@@ -766,33 +670,10 @@ export default function DomainConsentPage() {
     if (pane === 'content') {
       return (
         <>
-          <div className="field">
-            <label htmlFor="consentTemplateContent">Consent Template</label>
-            <select
-              id="consentTemplateContent"
-              value={consentTemplateId}
-              onChange={(e) => {
-                const value = e.target.value as ConsentTemplateId | '';
-                if (!value) {
-                  setConsentTemplateId('');
-                  return;
-                }
-                applyConsentTemplate(value);
-              }}
-            >
-              <option value="">Choose a template…</option>
-              {CONSENT_TEMPLATES.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <p className="cy-banner-hint">
-            {selectedTemplate?.description ??
-              'Edit the banner copy visitors see. Changes update the live preview instantly.'}
-          </p>
           <h3>Content</h3>
+          <p className="cy-banner-hint">
+            Edit the banner copy visitors see. Changes update the live preview instantly.
+          </p>
           <div className="field">
             <label htmlFor="titleStudio">Title</label>
             <input
@@ -869,30 +750,8 @@ export default function DomainConsentPage() {
     if (pane === 'colors') {
       return (
         <>
-          <div className="field">
-            <label htmlFor="consentTemplateColors">Consent Template</label>
-            <select
-              id="consentTemplateColors"
-              value={consentTemplateId}
-              onChange={(e) => {
-                const value = e.target.value as ConsentTemplateId | '';
-                if (!value) {
-                  setConsentTemplateId('');
-                  return;
-                }
-                applyConsentTemplate(value);
-              }}
-            >
-              <option value="">Choose a template…</option>
-              {CONSENT_TEMPLATES.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <p className="cy-banner-hint">Adjust banner colors, buttons, and typography.</p>
           <h3>Colors</h3>
+          <p className="cy-banner-hint">Adjust banner colors, buttons, and typography.</p>
           <div className="cy-banner-color-row">
             <div className="field">
               <label htmlFor="primaryColorStudio">Primary</label>
@@ -984,32 +843,8 @@ export default function DomainConsentPage() {
     if (pane === 'css') {
       return (
         <>
-          <div className="field">
-            <label htmlFor="consentTemplateCss">Consent Template</label>
-            <select
-              id="consentTemplateCss"
-              value={consentTemplateId}
-              onChange={(e) => {
-                const value = e.target.value as ConsentTemplateId | '';
-                if (!value) {
-                  setConsentTemplateId('');
-                  return;
-                }
-                applyConsentTemplate(value);
-              }}
-            >
-              <option value="">Choose a template…</option>
-              {CONSENT_TEMPLATES.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <p className="cy-banner-hint">
-            {selectedTemplate?.description ?? 'Add custom CSS scoped to the banner preview.'}
-          </p>
           <h3>Custom CSS</h3>
+          <p className="cy-banner-hint">Add custom CSS scoped to the banner. Keep selectors banner-specific.</p>
           <div className="field">
             <label htmlFor="customCssStudio">Add your custom css here</label>
             <textarea

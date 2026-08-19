@@ -50,7 +50,8 @@ export const CONSENT_TEMPLATES: ConsentTemplateDefinition[] = [
   {
     id: 'us_state_laws',
     label: 'US State Laws',
-    description: 'Opt-out for US visitors with California Do Not Sell / Share support.',
+    description:
+      'The selected consent template supports CCPA/CPRA, VCDPA, CPA, CTDPA, and UCPA. US visitors see opt-out controls, including California Do Not Sell / Share.',
     geo: {
       enabled: true,
       defaultProfileId: 'us_opt_out',
