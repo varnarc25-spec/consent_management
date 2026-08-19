@@ -67,6 +67,7 @@ export class PublicCmpController {
   async getConfig(
     @Param('domainKey') domainKey: string,
     @Query('previewCountry') previewCountry?: string,
+    @Query('previewRegion') previewRegion?: string,
     @Query('previewProfileId') previewProfileId?: string,
     @Query('clientCountry') clientCountry?: string,
     @Query('clientLanguage') clientLanguage?: string,
@@ -114,6 +115,7 @@ export class PublicCmpController {
       domainRegion: domain.region,
       geoTargetingDisabled: organization?.geoTargetingDisabled ?? false,
       previewCountry: previewCountry ?? undefined,
+      previewRegion: previewRegion ?? undefined,
       ipGeo: ipGeo ? { country: ipGeo.country, region: ipGeo.region } : null,
       clientHints: {
         country: clientCountry ?? null,

@@ -42,4 +42,70 @@ describe('regional rules', () => {
     );
     expect(categories?.find((c) => c.slug === 'analytics')?.defaultState).toBe('DISABLED');
   });
+
+  it('matches California by US country + CA region, not all US visitors', () => {
+    const settings = {
+      enabled: true,
+      defaultProfileId: 'generic_opt_in',
+      regionalRules: [
+        {
+          id: 'us-ccpa',
+          name: 'California',
+          priority: 80,
+          conditions: { countries: ['US'], regions: ['CA'] },
+          profileId: 'ccpa',
+        },
+        {
+          id: 'us-states',
+          name: 'United States',
+          priority: 70,
+          conditions: { countryGroups: ['US'] },
+          profileId: 'us_opt_out',
+        },
+      ],
+    };
+
+    const california = resolveGeoRegulation(
+      { country: 'US', region: 'CA', language: 'en' },
+      settings,
+    );
+    expect(california.profileId).toBe('ccpa');
+    expect(california.regulation).toBe('CCPA');
+
+    const texas = resolveGeoRegulation(
+      { country: 'US', region: 'TX', language: 'en' },
+      settings,
+    );
+    expect(texas.profileId).toBe('us_opt_out');
+
+    const californiaByName = resolveGeoRegulation(
+      { country: 'US', region: 'California', language: 'en' },
+      settings,
+    );
+    expect(californiaByName.profileId).toBe('ccpa');
+  });
+
+  it('sets showDoNotSell on CCPA banners', () => {
+    const { banner } = applyRegulationProfile(
+      { title: 'Test', rejectButton: 'Reject all' },
+      [{ slug: 'analytics', defaultState: 'DISABLED' }],
+      resolveGeoRegulation(
+        { country: 'US', region: 'CA', language: 'en' },
+        {
+          enabled: true,
+          regionalRules: [
+            {
+              id: 'us-ccpa',
+              name: 'California',
+              priority: 80,
+              conditions: { countries: ['US'], regions: ['CA'] },
+              profileId: 'ccpa',
+            },
+          ],
+        },
+      ).profile,
+    );
+    expect((banner as { showDoNotSell?: boolean }).showDoNotSell).toBe(true);
+    expect((banner as { doNotSellLabel?: string }).doNotSellLabel).toContain('Do Not Sell');
+  });
 });

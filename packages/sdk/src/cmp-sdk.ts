@@ -116,13 +116,14 @@ export class CmpSdk {
       setDefaultCookieDomain(config.visitorCookieDomain);
     }
     this.visitor = getOrCreateVisitorId(this.visitorOptions());
-    this.initGoogleConsentModeDefault();
     const syncedFromGroup = await this.trySyncCrossDomainConsent();
     if (!syncedFromGroup) {
       await this.restoreStoredConsent();
     } else {
       this.emitConsentChanged();
     }
+    this.seedRuntimeConsentFromDefaults();
+    this.initGoogleConsentModeDefault();
     this.initBlocking();
     this.ready = true;
     this.emitReady();
@@ -330,6 +331,11 @@ export class CmpSdk {
   }
 
   rejectAll() {
+    return this.applyConsent(buildConsentState(this.categories(), 'reject_all'), 'banner_reject_all');
+  }
+
+  /** CCPA/CPRA-style opt-out of sale/share (rejects optional categories). */
+  doNotSellOrShare() {
     return this.applyConsent(buildConsentState(this.categories(), 'reject_all'), 'banner_reject_all');
   }
 
@@ -541,6 +547,14 @@ export class CmpSdk {
     }
   }
 
+  private seedRuntimeConsentFromDefaults() {
+    if (!this.config) return;
+    if (loadConsent(this.domainKey, this.config.configVersion)) return;
+    // Opt-out profiles use ENABLED defaults; apply them so scripts are not blocked like opt-in.
+    this.consent = buildConsentState(this.categories(), 'custom');
+    this.emitConsentChanged();
+  }
+
   private maybeApplyGpc() {
     if (!this.config) return;
     const behavior = this.config.banner?.behavior ?? {};
@@ -600,9 +614,21 @@ export class CmpSdk {
     this.privacyTrigger?.destroy();
     if (!this.config) return;
     const stored = loadConsent(this.domainKey, this.config.configVersion);
-    if (!stored) return;
+    const showDoNotSell = Boolean(this.config.banner?.showDoNotSell);
+    if (!stored && !showDoNotSell) return;
     const trigger = this.config.banner?.privacyTrigger;
-    this.privacyTrigger = mountPrivacyTrigger(trigger, () => this.openPreferences());
+    const dnsLabel =
+      this.config.banner?.doNotSellLabel ?? 'Do Not Sell or Share My Personal Information';
+    this.privacyTrigger = mountPrivacyTrigger(
+      trigger,
+      () => this.openPreferences(),
+      showDoNotSell
+        ? {
+            label: dnsLabel,
+            onDoNotSell: () => void this.doNotSellOrShare(),
+          }
+        : undefined,
+    );
   }
 
   private async applyConsent(categories: Record<string, boolean>, method: ConsentCollectionMethod) {

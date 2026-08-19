@@ -434,6 +434,7 @@ export const googleConsentModeSchema = z.object({
 export const regulationConfigSchema = z.object({
   googleConsentMode: googleConsentModeSchema.optional(),
   geo: geoRegulationSettingsSchema.optional(),
+  consentTemplateId: z.enum(['gdpr', 'us_state_laws', 'gdpr_and_us']).nullable().optional(),
 });
 
 export const updatePolicyVersionSchema = z.object({

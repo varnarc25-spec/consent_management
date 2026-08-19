@@ -1,4 +1,5 @@
-import { countryInGroups, countryMatchesGroup } from './country-groups';
+import { countryInGroups } from './country-groups';
+import { normalizeRegionCode } from './region-codes';
 import {
   getRegulationProfile,
   type RegulationProfile,
@@ -58,12 +59,9 @@ function matchesConditions(rule: RegionalRule, context: RuleMatchContext): boole
   }
 
   if (conditions.regions?.length) {
-    const region = context.region?.toUpperCase();
+    const region = normalizeRegionCode(context.region);
     if (!region) return false;
-    const regionMatch = conditions.regions.some((r) => {
-      const key = r.toUpperCase();
-      return region === key || countryMatchesGroup(context.country, key);
-    });
+    const regionMatch = conditions.regions.some((r) => normalizeRegionCode(r) === region);
     if (!regionMatch) return false;
   }
 
@@ -156,8 +154,18 @@ export function applyRegulationProfile<T extends Record<string, unknown>>(
       behavior: { ...(mergedBanner.behavior as object), ...behavior },
     } as T;
 
-    if (profile.showDoNotSell && mergedBanner.rejectButton === undefined) {
-      (mergedBanner as { rejectButton?: string }).rejectButton = 'Do Not Sell or Share';
+    if (profile.showDoNotSell) {
+      const bannerFlags = mergedBanner as {
+        showDoNotSell?: boolean;
+        doNotSellLabel?: string;
+        rejectButton?: string;
+      };
+      bannerFlags.showDoNotSell = true;
+      bannerFlags.doNotSellLabel =
+        bannerFlags.doNotSellLabel ?? 'Do Not Sell or Share My Personal Information';
+      if (!bannerFlags.rejectButton) {
+        bannerFlags.rejectButton = 'Do Not Sell or Share';
+      }
     }
   }
 
@@ -195,7 +203,7 @@ export const DEFAULT_REGIONAL_RULES: RegionalRule[] = [
     id: 'us-ccpa',
     name: 'United States (California)',
     priority: 80,
-    conditions: { countryGroups: ['US-CA'] },
+    conditions: { countries: ['US'], regions: ['CA'] },
     profileId: 'ccpa',
   },
   {

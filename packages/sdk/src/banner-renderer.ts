@@ -312,6 +312,20 @@ export function renderBanner(
     customize.setAttribute('data-cmp-action', multiStepIntro ? 'continue' : 'customize');
 
     actions.append(accept, reject, customize);
+
+    if (banner.showDoNotSell) {
+      const dns = createButton(
+        banner.doNotSellLabel ?? 'Do Not Sell or Share My Personal Information',
+        'secondary',
+        () => {
+          onConsent(buildConsentState(categories, 'reject_all'));
+          hide();
+        },
+      );
+      dns.setAttribute('data-cmp-action', 'do-not-sell');
+      actions.append(dns);
+    }
+
     inner.append(title, description, actions);
     appendLinks(inner, banner);
     appendLegal(inner, banner);

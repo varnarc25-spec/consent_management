@@ -8,6 +8,16 @@ import { ProtectedLayout } from '@/components/protected-layout';
 import { WebsiteLayout } from '@/components/website-layout';
 import { apiFetch } from '@/lib/api';
 import { BANNER_TEXT_TEMPLATES } from '@cmp/utils/banner-templates';
+import {
+  CONSENT_TEMPLATES,
+  DEFAULT_REGIONAL_RULES,
+  getConsentTemplate,
+  listRegulationProfiles,
+  resolveConsentTemplateBannerText,
+  type ConsentTemplateId,
+  type GeoRegulationSettings,
+  type RegionalRule,
+} from '@cmp/utils';
 
 interface Category {
   id: string;
@@ -79,15 +89,30 @@ interface BannerState {
   };
 }
 
+interface GoogleConsentModeConfig {
+  enabled: boolean;
+  mode: 'basic' | 'advanced';
+  adsDataRedaction: boolean;
+  urlPassthrough: boolean;
+  waitForUpdate: number;
+}
+
 interface Policy {
   id: string;
   versionNumber: number;
   status: string;
   bannerContent: Partial<BannerState> | null;
+  regulationConfig?: {
+    googleConsentMode?: Partial<GoogleConsentModeConfig>;
+    geo?: Partial<GeoRegulationSettings>;
+    consentTemplateId?: ConsentTemplateId | string | null;
+  } | null;
   changeSummary: string | null;
   publishedAt: string | null;
   scheduledAt: string | null;
   requiresRenewal: boolean;
+  supportedLanguages?: string[] | null;
+  legalText?: { defaultLanguage?: string } | null;
 }
 
 interface Renewal {
@@ -97,7 +122,37 @@ interface Renewal {
   createdAt: string;
 }
 
-type Tab = 'categories' | 'banner' | 'policy' | 'renewals';
+type Tab = 'categories' | 'banner' | 'template' | 'regional' | 'policy' | 'renewals';
+
+const REGULATION_PROFILE_OPTIONS = listRegulationProfiles();
+
+function mergeGeoSettings(config?: Partial<GeoRegulationSettings> | null): GeoRegulationSettings {
+  return {
+    enabled: config?.enabled ?? true,
+    defaultProfileId: config?.defaultProfileId ?? 'generic_opt_in',
+    regionalRules: (config?.regionalRules as RegionalRule[] | undefined) ?? DEFAULT_REGIONAL_RULES,
+  };
+}
+
+const defaultGoogleConsentMode = (): GoogleConsentModeConfig => ({
+  enabled: true,
+  mode: 'advanced',
+  adsDataRedaction: false,
+  urlPassthrough: false,
+  waitForUpdate: 500,
+});
+
+function mergeGoogleConsentMode(
+  config?: Partial<GoogleConsentModeConfig> | null,
+): GoogleConsentModeConfig {
+  const base = defaultGoogleConsentMode();
+  if (!config) return base;
+  return {
+    ...base,
+    ...config,
+    waitForUpdate: config.waitForUpdate ?? base.waitForUpdate,
+  };
+}
 
 const defaultBanner = (): BannerState => ({
   title: 'We value your privacy',
@@ -217,6 +272,11 @@ export default function DomainConsentPage() {
   const [scheduleAt, setScheduleAt] = useState('');
   const [renewalReason, setRenewalReason] = useState('admin_requested');
   const [textTemplate, setTextTemplate] = useState('');
+  const [consentTemplateId, setConsentTemplateId] = useState<ConsentTemplateId | ''>('');
+  const [geoSettings, setGeoSettings] = useState<GeoRegulationSettings>(mergeGeoSettings());
+  const [googleConsentMode, setGoogleConsentMode] = useState<GoogleConsentModeConfig>(defaultGoogleConsentMode());
+  const [supportedLanguages, setSupportedLanguages] = useState<string[]>(['en']);
+  const [defaultLanguage, setDefaultLanguage] = useState('en');
 
   function applyTextTemplate(templateId: string) {
     const template = BANNER_TEXT_TEMPLATES.find((item) => item.id === templateId);
@@ -231,6 +291,35 @@ export default function DomainConsentPage() {
       saveButton: template.saveButton,
       legalNotice: template.legalNotice,
       footerContent: template.footerContent,
+    }));
+  }
+
+  function applyConsentTemplate(templateId: ConsentTemplateId) {
+    const template = getConsentTemplate(templateId);
+    if (!template) return;
+    setConsentTemplateId(templateId);
+    setGeoSettings(template.geo);
+    setGoogleConsentMode((current) => ({ ...current, enabled: true }));
+    const bannerText = resolveConsentTemplateBannerText(template);
+    if (bannerText) setTextTemplate(bannerText.id);
+    setBanner((current) => ({
+      ...current,
+      ...(bannerText
+        ? {
+            title: bannerText.title,
+            description: bannerText.description,
+            acceptButton: bannerText.acceptButton,
+            rejectButton: bannerText.rejectButton,
+            preferencesButton: bannerText.preferencesButton,
+            saveButton: bannerText.saveButton,
+            legalNotice: bannerText.legalNotice,
+            footerContent: bannerText.footerContent,
+          }
+        : {}),
+      behavior: {
+        ...current.behavior,
+        respectGlobalPrivacyControl: template.respectGlobalPrivacyControl,
+      },
     }));
   }
 
@@ -254,6 +343,17 @@ export default function DomainConsentPage() {
       if (r.data) {
         setDraft(r.data);
         setBanner(mergeBanner(r.data.bannerContent as Partial<BannerState>));
+        const regulation = r.data.regulationConfig;
+        setGoogleConsentMode(mergeGoogleConsentMode(regulation?.googleConsentMode));
+        setGeoSettings(mergeGeoSettings(regulation?.geo));
+        const templateId = regulation?.consentTemplateId;
+        if (templateId === 'gdpr' || templateId === 'us_state_laws' || templateId === 'gdpr_and_us') {
+          setConsentTemplateId(templateId);
+        }
+        const langs = (r.data.supportedLanguages as string[] | null) ?? ['en'];
+        setSupportedLanguages(langs);
+        const legal = r.data.legalText;
+        setDefaultLanguage(legal?.defaultLanguage ?? langs[0] ?? 'en');
       }
     });
   }
@@ -327,6 +427,51 @@ export default function DomainConsentPage() {
     }
   }
 
+  function buildRegulationConfigPatch() {
+    return {
+      regulationConfig: {
+        googleConsentMode,
+        geo: geoSettings,
+        consentTemplateId: consentTemplateId || null,
+      },
+      supportedLanguages,
+      legalText: { defaultLanguage },
+    };
+  }
+
+  async function saveRegulationSettings() {
+    if (!draft) return;
+    setError('');
+    const result = await apiFetch<Policy>(`/domains/${domainId}/consent/policies/${draft.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(buildRegulationConfigPatch()),
+    });
+    if (result.ok) {
+      setMessage('Consent template / regional settings saved');
+      loadPolicies();
+    } else {
+      setError(result.error?.message ?? 'Failed to save regional settings');
+    }
+  }
+
+  async function saveConsentTemplateAndBanner() {
+    if (!draft) return;
+    setError('');
+    const result = await apiFetch<Policy>(`/domains/${domainId}/consent/policies/${draft.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        bannerContent: serializeBanner(banner),
+        ...buildRegulationConfigPatch(),
+      }),
+    });
+    if (result.ok) {
+      setMessage('Consent template applied and saved to draft');
+      loadPolicies();
+    } else {
+      setError(result.error?.message ?? 'Failed to save consent template');
+    }
+  }
+
   async function publishDraft() {
     setPublishing(true);
     setError('');
@@ -338,7 +483,10 @@ export default function DomainConsentPage() {
     }
     const saveResult = await apiFetch<Policy>(`/domains/${domainId}/consent/policies/${draft.id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ bannerContent: serializeBanner(banner) }),
+      body: JSON.stringify({
+        bannerContent: serializeBanner(banner),
+        ...buildRegulationConfigPatch(),
+      }),
     });
     if (!saveResult.ok) {
       setError(saveResult.error?.message ?? 'Failed to save banner before publish');
@@ -397,14 +545,18 @@ export default function DomainConsentPage() {
       {error && <p className="error">{error}</p>}
 
       <div style={{ display: 'flex', gap: '0.5rem', margin: '1.5rem 0', flexWrap: 'wrap' }}>
-        {(['categories', 'banner', 'policy', 'renewals'] as Tab[]).map((item) => (
+        {(['categories', 'banner', 'template', 'regional', 'policy', 'renewals'] as Tab[]).map((item) => (
           <button
             key={item}
             className={tab === item ? 'btn' : 'btn btn-secondary'}
             type="button"
             onClick={() => setTab(item)}
           >
-            {item.charAt(0).toUpperCase() + item.slice(1)}
+            {item === 'template'
+              ? 'Consent template'
+              : item === 'regional'
+                ? 'Geo & GCM'
+                : item.charAt(0).toUpperCase() + item.slice(1)}
           </button>
         ))}
       </div>
@@ -759,6 +911,220 @@ export default function DomainConsentPage() {
               theme={banner.theme}
               viewport={previewViewport}
             />
+          </div>
+        </div>
+      )}
+
+      {tab === 'template' && (
+        <div className="card">
+          <h3>Consent template</h3>
+          <p className="website-section-muted" style={{ marginTop: 0 }}>
+            Choose a law profile like CookieYes. This sets geo rules, GPC, and suggested banner copy.
+            Publish the policy afterward so the live SDK receives the update.
+          </p>
+          <div className="field">
+            <label htmlFor="consentTemplate">Template</label>
+            <select
+              id="consentTemplate"
+              value={consentTemplateId}
+              onChange={(e) => {
+                const value = e.target.value as ConsentTemplateId | '';
+                if (!value) {
+                  setConsentTemplateId('');
+                  return;
+                }
+                applyConsentTemplate(value);
+              }}
+            >
+              <option value="">Choose a consent template…</option>
+              {CONSENT_TEMPLATES.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {consentTemplateId && (
+            <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
+              {CONSENT_TEMPLATES.find((item) => item.id === consentTemplateId)?.description}
+            </p>
+          )}
+          <button className="btn" type="button" onClick={saveConsentTemplateAndBanner}>
+            Save template to draft
+          </button>
+          {(message || error) && (
+            <p className={error ? 'error' : 'success'} style={{ marginTop: '1rem' }} role="status">
+              {error || message}
+            </p>
+          )}
+        </div>
+      )}
+
+      {tab === 'regional' && (
+        <div>
+          <div className="card" style={{ marginBottom: '1.5rem' }}>
+            <h3>Geo targeting &amp; regulation profiles</h3>
+            <p className="website-section-muted" style={{ marginTop: 0 }}>
+              Regional rules map visitor country/region to opt-in (GDPR) or opt-out (CCPA/US) behavior.
+              California uses country <code>US</code> + region <code>CA</code>.
+            </p>
+            <div className="field">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={Boolean(geoSettings.enabled)}
+                  onChange={(e) => setGeoSettings({ ...geoSettings, enabled: e.target.checked })}
+                />
+                Enable regional rules for this policy
+              </label>
+            </div>
+            <div className="field">
+              <label htmlFor="defaultProfileId">Default profile (no rule match)</label>
+              <select
+                id="defaultProfileId"
+                value={geoSettings.defaultProfileId ?? 'generic_opt_in'}
+                onChange={(e) => setGeoSettings({ ...geoSettings, defaultProfileId: e.target.value })}
+              >
+                {REGULATION_PROFILE_OPTIONS.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => setGeoSettings({ ...geoSettings, regionalRules: DEFAULT_REGIONAL_RULES })}
+            >
+              Reset to default regional rules
+            </button>
+            <table style={{ marginTop: '1.5rem' }}>
+              <thead>
+                <tr>
+                  <th>Rule</th>
+                  <th>Conditions</th>
+                  <th>Profile</th>
+                  <th>Priority</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(geoSettings.regionalRules ?? []).map((rule) => (
+                  <tr key={rule.id}>
+                    <td>{rule.name}</td>
+                    <td>
+                      <code>
+                        {(
+                          rule.conditions.countryGroups ??
+                          rule.conditions.countries ??
+                          []
+                        ).join(', ') || '—'}
+                        {rule.conditions.regions?.length
+                          ? ` / region ${rule.conditions.regions.join(',')}`
+                          : ''}
+                      </code>
+                    </td>
+                    <td>
+                      {REGULATION_PROFILE_OPTIONS.find((p) => p.id === rule.profileId)?.name ??
+                        rule.profileId}
+                    </td>
+                    <td>{rule.priority}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button className="btn" type="button" style={{ marginTop: '1rem' }} onClick={saveRegulationSettings}>
+              Save geo &amp; GCM settings
+            </button>
+          </div>
+
+          <div className="card">
+            <h3>Google Consent Mode</h3>
+            <p className="website-section-muted" style={{ marginTop: 0 }}>
+              Configure Consent Mode v2 defaults emitted by the CMP. Load the CMP snippet before GTM/gtag.
+            </p>
+            <div className="field">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={googleConsentMode.enabled}
+                  onChange={(e) =>
+                    setGoogleConsentMode({ ...googleConsentMode, enabled: e.target.checked })
+                  }
+                />
+                Enable Google Consent Mode
+              </label>
+            </div>
+            <div className="field">
+              <label htmlFor="gcmMode">Mode</label>
+              <select
+                id="gcmMode"
+                value={googleConsentMode.mode}
+                onChange={(e) =>
+                  setGoogleConsentMode({
+                    ...googleConsentMode,
+                    mode: e.target.value as GoogleConsentModeConfig['mode'],
+                  })
+                }
+              >
+                <option value="advanced">Advanced (denied defaults, tags load with limited data)</option>
+                <option value="basic">Basic (block tags until consent)</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="gcmWaitForUpdate">Wait for update (ms)</label>
+              <input
+                id="gcmWaitForUpdate"
+                type="number"
+                min={0}
+                max={5000}
+                value={googleConsentMode.waitForUpdate}
+                onChange={(e) =>
+                  setGoogleConsentMode({
+                    ...googleConsentMode,
+                    waitForUpdate: Number(e.target.value),
+                  })
+                }
+              />
+            </div>
+            <div className="field">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={googleConsentMode.adsDataRedaction}
+                  onChange={(e) =>
+                    setGoogleConsentMode({
+                      ...googleConsentMode,
+                      adsDataRedaction: e.target.checked,
+                    })
+                  }
+                />
+                Ads data redaction
+              </label>
+            </div>
+            <div className="field">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={googleConsentMode.urlPassthrough}
+                  onChange={(e) =>
+                    setGoogleConsentMode({
+                      ...googleConsentMode,
+                      urlPassthrough: e.target.checked,
+                    })
+                  }
+                />
+                URL passthrough
+              </label>
+            </div>
+            <button className="btn" type="button" onClick={saveRegulationSettings}>
+              Save geo &amp; GCM settings
+            </button>
+            {(message || error) && (
+              <p className={error ? 'error' : 'success'} style={{ marginTop: '1rem' }} role="status">
+                {error || message}
+              </p>
+            )}
           </div>
         </div>
       )}

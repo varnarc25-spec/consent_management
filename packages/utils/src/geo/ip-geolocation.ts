@@ -1,3 +1,5 @@
+import { normalizeRegionCode } from './region-codes';
+
 /** Optional IP geolocation fallback when CDN headers are absent. */
 export interface IpGeoResult {
   country: string | null;
@@ -26,12 +28,16 @@ export async function lookupCountryFromIp(ip: string | undefined | null): Promis
       signal: AbortSignal.timeout(3000),
     });
     if (!response.ok) return null;
-    const data = (await response.json()) as { country_code?: string; region?: string };
+    const data = (await response.json()) as {
+      country_code?: string;
+      region?: string;
+      region_code?: string;
+    };
     const country = normalizeCountry(data.country_code);
     if (!country) return null;
     return {
       country,
-      region: data.region?.trim() || country,
+      region: normalizeRegionCode(data.region_code) ?? normalizeRegionCode(data.region),
       source: 'ip_api',
     };
   } catch {

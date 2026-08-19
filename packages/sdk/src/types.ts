@@ -63,6 +63,9 @@ export interface BannerContent {
   footerContent?: string;
   privacyPolicyUrl?: string;
   cookiePolicyUrl?: string;
+  /** When true, show a dedicated Do Not Sell / Share control (CCPA/CPRA). */
+  showDoNotSell?: boolean;
+  doNotSellLabel?: string;
   categoryDescriptions?: Record<string, string>;
   vendorDescriptions?: Record<string, string>;
   layout?: BannerLayout;

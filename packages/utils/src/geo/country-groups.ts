@@ -8,7 +8,7 @@ export const COUNTRY_GROUP_MEMBERS: Record<string, Set<string>> = {
   EU: EU_COUNTRIES,
   UK: new Set(['GB', 'UK']),
   US: new Set(['US']),
-  'US-CA': new Set(['US']),
+  // California is matched via countries: ['US'] + regions: ['CA'], not a country group.
   BR: new Set(['BR']),
   CA: new Set(['CA']),
   AU: new Set(['AU']),

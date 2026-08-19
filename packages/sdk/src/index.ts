@@ -21,6 +21,7 @@ declare global {
       setConsent?: (categories: Record<string, boolean>) => void;
       acceptAll?: () => void;
       rejectAll?: () => void;
+      doNotSellOrShare?: () => void;
       withdrawConsent?: () => void;
       setAuthenticatedUserId?: (userId: string | null) => void;
       hasConsent?: (category: string) => boolean;
@@ -98,6 +99,7 @@ export function initFromScript() {
     setConsent: (categories) => sdk.setConsent(categories),
     acceptAll: () => sdk.acceptAll(),
     rejectAll: () => sdk.rejectAll(),
+    doNotSellOrShare: () => sdk.doNotSellOrShare(),
     withdrawConsent: () => sdk.withdrawConsent(),
     setAuthenticatedUserId: (userId: string | null) => sdk.setAuthenticatedUserId(userId),
     hasConsent: (category) => sdk.hasConsent(category),

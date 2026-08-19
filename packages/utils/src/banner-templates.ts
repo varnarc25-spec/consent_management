@@ -50,4 +50,31 @@ export const BANNER_TEXT_TEMPLATES: BannerTextTemplate[] = [
     legalNotice: '',
     footerContent: '',
   },
+  {
+    id: 'us_state_laws',
+    label: 'US state privacy',
+    title: 'Your privacy choices',
+    description:
+      'We and our partners use cookies and similar technologies for analytics, advertising, and site functionality. California residents can opt out of the sale or sharing of personal information.',
+    acceptButton: 'Accept',
+    rejectButton: 'Do Not Sell or Share',
+    preferencesButton: 'Privacy choices',
+    saveButton: 'Save preferences',
+    legalNotice:
+      'You can change your mind anytime. Look for “Do Not Sell or Share My Personal Information”.',
+    footerContent: '',
+  },
+  {
+    id: 'gdpr_and_us',
+    label: 'GDPR & US state laws',
+    title: 'We value your privacy',
+    description:
+      'Depending on your location, we ask for consent or offer opt-out controls for cookies and similar technologies used for analytics and advertising.',
+    acceptButton: 'Accept all',
+    rejectButton: 'Reject / Do Not Sell',
+    preferencesButton: 'Manage preferences',
+    saveButton: 'Save preferences',
+    legalNotice: 'You can withdraw consent or update your choices at any time.',
+    footerContent: '',
+  },
 ];

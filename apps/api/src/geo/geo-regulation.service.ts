@@ -13,6 +13,7 @@ export interface GeoResolutionInput {
   domainRegion?: string | null;
   geoTargetingDisabled?: boolean;
   previewCountry?: string | null;
+  previewRegion?: string | null;
   ipGeo?: { country: string | null; region?: string | null } | null;
   clientHints?: {
     country?: string | null;
@@ -45,14 +46,14 @@ export class GeoRegulationService {
     const geoSettings = regulationConfig.geo;
 
     const serverGeo = input.geoTargetingDisabled
-      ? { country: null, source: 'disabled' as const }
+      ? { country: null, region: null, source: 'disabled' as const }
       : input.ipGeo?.country
-        ? { country: input.ipGeo.country, source: 'ip_api' as const }
+        ? { country: input.ipGeo.country, region: input.ipGeo.region ?? null, source: 'ip_api' as const }
         : detectCountryFromHeaders(input.headers);
 
     const client = {
       country: input.clientHints?.country ?? input.ipGeo?.country ?? null,
-      region: input.clientHints?.region ?? input.ipGeo?.region ?? null,
+      region: input.clientHints?.region ?? input.ipGeo?.region ?? serverGeo.region ?? null,
       language: input.clientHints?.language ?? 'en',
       timezone: input.clientHints?.timezone ?? null,
     };
@@ -63,6 +64,7 @@ export class GeoRegulationService {
       input.domainRegion,
       input.geoTargetingDisabled,
       input.previewCountry,
+      input.previewRegion,
     );
 
     const resolved = resolveGeoRegulation(

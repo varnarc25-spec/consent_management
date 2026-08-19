@@ -122,6 +122,7 @@ export {
 } from './geo/country-groups';
 export {
   detectCountryFromHeaders,
+  detectRegionFromHeaders,
   detectClientGeoHints,
   mergeDetectedGeo,
   type DetectedGeo,
@@ -143,6 +144,14 @@ export {
   type GeoRegulationSettings,
   type ResolvedGeoRegulation,
 } from './geo/regional-rules';
+export { normalizeRegionCode } from './geo/region-codes';
+export {
+  CONSENT_TEMPLATES,
+  getConsentTemplate,
+  resolveConsentTemplateBannerText,
+  type ConsentTemplateId,
+  type ConsentTemplateDefinition,
+} from './geo/consent-templates';
 export {
   lookupCountryFromIp,
   extractClientIp,
