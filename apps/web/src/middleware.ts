@@ -62,7 +62,11 @@ export async function middleware(request: NextRequest) {
     }
 
     if (isAuthRoute(pathname)) {
-      return await getAuth0().middleware(request);
+      const authResponse = await getAuth0().middleware(request);
+      if (pathname === '/auth/callback' && authResponse.status >= 400) {
+        return NextResponse.redirect(new URL('/', getAppBaseUrl()));
+      }
+      return authResponse;
     }
 
     const requestHost = getRequestHost(request.headers, request.nextUrl.host);
@@ -84,6 +88,9 @@ export async function middleware(request: NextRequest) {
     return authResponse;
   } catch (err) {
     console.error('[middleware] Fatal auth error:', err);
+    if (pathname === '/auth/callback') {
+      return NextResponse.redirect(new URL('/', getAppBaseUrl()));
+    }
     if (isAuthRoute(pathname)) {
       return new NextResponse('Authentication is temporarily unavailable.', { status: 503 });
     }
